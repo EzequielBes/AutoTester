@@ -94,9 +94,11 @@ function Invoke-ClaudeCli {
     $psi.UseShellExecute = $false
 
     $proc = [System.Diagnostics.Process]::Start($psi)
-    $stdout = $proc.StandardOutput.ReadToEnd()
-    $null = $proc.StandardError.ReadToEnd()
+    $stdoutTask = $proc.StandardOutput.ReadToEndAsync()
+    $stderrTask = $proc.StandardError.ReadToEndAsync()
     $proc.WaitForExit()
+    $stdout = $stdoutTask.Result
+    $null = $stderrTask.Result
     return $stdout
 }
 
