@@ -1,0 +1,51 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const { execFileSync } = require('node:child_process');
+const { listBranches, listAllFiles, listChangedFiles } = require('../src/git');
+
+function run(cwd, args) {
+  execFileSync('git', args, { cwd });
+}
+
+function makeFixtureRepo() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'git-fixture-'));
+  run(dir, ['init', '--initial-branch=main']);
+  run(dir, ['config', 'user.email', 'test@example.com']);
+  run(dir, ['config', 'user.name', 'Test']);
+  fs.writeFileSync(path.join(dir, 'a.txt'), 'hello\n');
+  run(dir, ['add', 'a.txt']);
+  run(dir, ['commit', '-m', 'initial']);
+  run(dir, ['checkout', '-b', 'feature']);
+  fs.writeFileSync(path.join(dir, 'b.txt'), 'world\n');
+  run(dir, ['add', 'b.txt']);
+  run(dir, ['commit', '-m', 'add b']);
+  return dir;
+}
+
+test('lists branches including main and feature', () => {
+  const dir = makeFixtureRepo();
+  const branches = listBranches(dir);
+  assert.ok(branches.includes('main'));
+  assert.ok(branches.includes('feature'));
+});
+
+test('lists all tracked files', () => {
+  const dir = makeFixtureRepo();
+  const files = listAllFiles(dir);
+  assert.deepEqual(files.sort(), ['a.txt', 'b.txt']);
+});
+
+test('lists only files changed on the feature branch vs main', () => {
+  const dir = makeFixtureRepo();
+  const changed = listChangedFiles(dir, 'feature');
+  assert.deepEqual(changed, ['b.txt']);
+});
+
+test('returns no changed files for the default branch itself', () => {
+  const dir = makeFixtureRepo();
+  const changed = listChangedFiles(dir, 'main');
+  assert.deepEqual(changed, []);
+});
