@@ -41,3 +41,14 @@ test('rejects a line range outside the file', () => {
   const content = 'only one line';
   assert.throws(() => applyFinding(content, { lines: '5', suggestion: 'x' }));
 });
+
+test('preserves original line endings for lines outside the edited range', () => {
+  const content = 'a\nb\r\nc\n';
+  const result = applyFinding(content, { lines: '1', suggestion: 'A' });
+  assert.equal(result, 'A\nb\r\nc\n');
+});
+
+test("rejects a line range one past a trailing-newline file's real last line", () => {
+  const content = 'a\nb\nc\n';
+  assert.throws(() => applyFinding(content, { lines: '4', suggestion: 'x' }));
+});

@@ -13,16 +13,30 @@ function parseLineRange(lines) {
   return { start, end };
 }
 
+function splitLinesWithEol(fileContent) {
+  const matches = fileContent.match(/[^\r\n]*(?:\r\n|\r|\n|$)/g) || [''];
+  if (matches.length > 1 && matches[matches.length - 1] === '') {
+    matches.pop();
+  }
+  return matches.map((line) => {
+    if (line.endsWith('\r\n')) return { content: line.slice(0, -2), eol: '\r\n' };
+    if (line.endsWith('\n')) return { content: line.slice(0, -1), eol: '\n' };
+    if (line.endsWith('\r')) return { content: line.slice(0, -1), eol: '\r' };
+    return { content: line, eol: '' };
+  });
+}
+
 function applyFinding(fileContent, finding) {
   const { start, end } = parseLineRange(finding.lines);
-  const eol = fileContent.includes('\r\n') ? '\r\n' : '\n';
-  const fileLines = fileContent.split(/\r\n|\n/);
-  if (start < 1 || end > fileLines.length) {
-    throw new Error(`line range ${finding.lines} is outside the file (${fileLines.length} lines)`);
+  const lines = splitLinesWithEol(fileContent);
+  if (start < 1 || end > lines.length) {
+    throw new Error(`line range ${finding.lines} is outside the file (${lines.length} lines)`);
   }
+  const insertedEol = lines[end - 1].eol || '\n';
   const suggestionLines = finding.suggestion.length === 0 ? [] : finding.suggestion.split(/\r\n|\n/);
-  fileLines.splice(start - 1, end - start + 1, ...suggestionLines);
-  return fileLines.join(eol);
+  const newEntries = suggestionLines.map((content) => ({ content, eol: insertedEol }));
+  lines.splice(start - 1, end - start + 1, ...newEntries);
+  return lines.map((line) => line.content + line.eol).join('');
 }
 
 module.exports = { parseLineRange, applyFinding };
