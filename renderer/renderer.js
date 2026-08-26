@@ -21,6 +21,22 @@ function setStatus(message, kind) {
   if (kind) el.classList.add(kind);
 }
 
+const CORE_STATE_CLASSES = ['running', 'done', 'warn', 'alert', 'error'];
+
+function setCoreState(state, { value, label } = {}) {
+  const core = document.getElementById('hud-core');
+  core.classList.remove(...CORE_STATE_CLASSES);
+  if (state) core.classList.add(...state.split(' '));
+  document.getElementById('core-value').textContent = value ?? '--';
+  document.getElementById('core-label').textContent = label ?? 'Standby';
+}
+
+function worstSeverityClass(findings) {
+  if (findings.some((f) => f.severity === 'high')) return 'done alert';
+  if (findings.some((f) => f.severity === 'medium')) return 'done warn';
+  return 'done';
+}
+
 // --- Tabs ---
 
 document.getElementById('tab-review').addEventListener('click', () => switchTab('review'));
@@ -144,6 +160,7 @@ document.getElementById('run-btn').addEventListener('click', async () => {
 
   currentRepoPath = repoPath;
   setStatus('Rodando análise...', 'running');
+  setCoreState('running', { value: '···', label: 'Executando' });
   document.getElementById('run-btn').disabled = true;
 
   try {
@@ -152,9 +169,12 @@ document.getElementById('run-btn').addEventListener('click', async () => {
     currentFileContents = response.fileContents;
     currentHistoryId = response.historyId;
     renderFindings();
-    setStatus(`${currentFindings.length} finding${currentFindings.length === 1 ? '' : 's'} encontrado${currentFindings.length === 1 ? '' : 's'}.`);
+    const n = currentFindings.length;
+    setStatus(`${n} finding${n === 1 ? '' : 's'} encontrado${n === 1 ? '' : 's'}.`);
+    setCoreState(worstSeverityClass(currentFindings), { value: n, label: n === 1 ? 'Finding' : 'Findings' });
   } catch (err) {
     setStatus(`Erro: ${err.message}`, 'error');
+    setCoreState('error', { value: '!!', label: 'Erro' });
   } finally {
     document.getElementById('run-btn').disabled = false;
   }

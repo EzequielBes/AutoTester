@@ -7,21 +7,25 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div class="backdrop" aria-hidden="true"></div>
+  <div class="hud-grid" aria-hidden="true"></div>
 
   <header class="app-header">
-    <h1>Review GUI</h1>
+    <div class="brand">
+      <span class="brand-dot" id="brand-dot"></span>
+      <h1>REVIEW&#8202;/&#8202;GUI</h1>
+    </div>
     <nav class="tabs" role="tablist">
       <button type="button" class="tab active" id="tab-review" role="tab" aria-selected="true">Review</button>
-      <button type="button" class="tab" id="tab-history" role="tab" aria-selected="false">Histórico</button>
+      <button type="button" class="tab" id="tab-history" role="tab" aria-selected="false">Log</button>
     </nav>
   </header>
 
   <main>
     <section id="view-review" class="view">
-      <div class="glass-panel" id="setup">
+      <div class="panel bracket" id="setup" style="--d: 0">
+        <h2 class="panel-title">Repositório</h2>
         <label>
-          Repositório
+          Caminho
           <input type="text" id="repo-path" placeholder="C:\caminho\para\o\repo" />
         </label>
 
@@ -32,13 +36,14 @@
           </label>
           <label class="checkbox-label">
             <input type="checkbox" id="changed-only" />
-            Só arquivos alterados na branch
+            Apenas alterados
           </label>
         </div>
 
         <div id="branch-info" class="branch-info hidden"></div>
 
-        <div id="file-list" class="glass-inset"></div>
+        <h2 class="panel-title">Arquivos</h2>
+        <div id="file-list" class="inset"></div>
 
         <div class="row">
           <label class="grow">
@@ -64,7 +69,19 @@
         <div class="actions">
           <button id="load-branches-btn">Carregar branches</button>
           <button id="load-files-btn">Carregar arquivos</button>
-          <button id="run-btn" class="primary">Rodar análise</button>
+          <button id="run-btn" class="primary">Executar análise</button>
+        </div>
+      </div>
+
+      <div class="hud-core" id="hud-core" style="--d: 1">
+        <svg viewBox="0 0 120 120" class="core-ring">
+          <circle class="ring-track" cx="60" cy="60" r="52" />
+          <circle class="ring-ticks" cx="60" cy="60" r="44" />
+          <circle class="ring-sweep" cx="60" cy="60" r="52" />
+        </svg>
+        <div class="core-readout">
+          <div class="core-value" id="core-value">--</div>
+          <div class="core-label" id="core-label">Standby</div>
         </div>
       </div>
 
@@ -74,7 +91,7 @@
     </section>
 
     <section id="view-history" class="view hidden">
-      <div class="glass-panel" id="history-summary"></div>
+      <div class="panel bracket" id="history-summary" style="--d: 0"></div>
       <div id="history-list"></div>
     </section>
   </main>
