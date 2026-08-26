@@ -37,6 +37,53 @@ function worstSeverityClass(findings) {
   return 'done';
 }
 
+// --- OS / editor integration ---
+
+if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+  Notification.requestPermission();
+}
+
+document.getElementById('browse-repo-btn').addEventListener('click', async () => {
+  const picked = await window.api.pickFolder();
+  if (picked) {
+    document.getElementById('repo-path').value = picked;
+  }
+});
+
+document.getElementById('reveal-repo-btn').addEventListener('click', () => {
+  const repoPath = getRepoPath();
+  if (!repoPath) {
+    setStatus('Informe o caminho do repositório primeiro.', 'error');
+    return;
+  }
+  window.api.revealRepo(repoPath);
+});
+
+async function populateRecentRepos() {
+  try {
+    const history = await window.api.readHistory();
+    const seen = new Set();
+    const recent = [];
+    [...history].reverse().forEach((entry) => {
+      if (entry.repoPath && !seen.has(entry.repoPath)) {
+        seen.add(entry.repoPath);
+        recent.push(entry.repoPath);
+      }
+    });
+    const datalist = document.getElementById('recent-repos');
+    datalist.innerHTML = '';
+    recent.slice(0, 8).forEach((repoPath) => {
+      const option = document.createElement('option');
+      option.value = repoPath;
+      datalist.appendChild(option);
+    });
+  } catch {
+    // history unavailable yet — datalist just stays empty
+  }
+}
+
+populateRecentRepos();
+
 // --- Tabs ---
 
 document.getElementById('tab-review').addEventListener('click', () => switchTab('review'));
@@ -172,6 +219,10 @@ document.getElementById('run-btn').addEventListener('click', async () => {
     const n = currentFindings.length;
     setStatus(`${n} finding${n === 1 ? '' : 's'} encontrado${n === 1 ? '' : 's'}.`);
     setCoreState(worstSeverityClass(currentFindings), { value: n, label: n === 1 ? 'Finding' : 'Findings' });
+    populateRecentRepos();
+    if (document.hidden && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+      new Notification('Review GUI', { body: `${n} finding${n === 1 ? '' : 's'} encontrado${n === 1 ? '' : 's'} em ${repoPath}` });
+    }
   } catch (err) {
     setStatus(`Erro: ${err.message}`, 'error');
     setCoreState('error', { value: '!!', label: 'Erro' });
@@ -234,6 +285,17 @@ function renderFindings() {
     actions.className = 'finding-actions';
 
     const isPending = finding.status === 'pending';
+
+    const editorBtn = document.createElement('button');
+    editorBtn.textContent = 'Abrir no editor';
+    editorBtn.addEventListener('click', async () => {
+      try {
+        await window.api.openInEditor({ repoPath: currentRepoPath, file: finding.file, lines: finding.lines });
+      } catch (err) {
+        setStatus(`Erro ao abrir editor: ${err.message}`, 'error');
+      }
+    });
+    actions.appendChild(editorBtn);
 
     const acceptBtn = document.createElement('button');
     acceptBtn.className = 'primary';

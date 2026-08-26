@@ -189,6 +189,22 @@ label:first-of-type {
   flex-wrap: wrap;
 }
 
+.input-with-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.input-with-buttons input {
+  flex: 1;
+  min-width: 0;
+}
+
+.input-with-buttons button {
+  padding: 9px 14px;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
 .row .grow {
   flex: 1;
   min-width: 180px;

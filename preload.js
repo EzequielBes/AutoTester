@@ -9,5 +9,8 @@ contextBridge.exposeInMainWorld('api', {
   runReview: (params) => ipcRenderer.invoke('review:run', params),
   applyFinding: (params) => ipcRenderer.invoke('review:apply-finding', params),
   readHistory: () => ipcRenderer.invoke('history:read'),
-  recordAccept: (historyId) => ipcRenderer.invoke('history:record-accept', historyId)
+  recordAccept: (historyId) => ipcRenderer.invoke('history:record-accept', historyId),
+  pickFolder: () => ipcRenderer.invoke('dialog:pick-folder'),
+  revealRepo: (repoPath) => ipcRenderer.invoke('shell:reveal-repo', repoPath),
+  openInEditor: (params) => ipcRenderer.invoke('shell:open-in-editor', params)
 });

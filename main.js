@@ -1,9 +1,10 @@
 'use strict';
 
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const crypto = require('node:crypto');
+const { execFile } = require('node:child_process');
 
 const { listBranches, listAllFiles, listChangedFiles, getBranchInfo } = require('./src/git');
 const { buildSystemPrompt } = require('./src/promptBuilder');
@@ -11,6 +12,7 @@ const { runClaudeReview } = require('./src/claudeRunner');
 const { applyFinding } = require('./src/applyFinding');
 const { readHistory, appendHistoryEntry, incrementAccepted } = require('./src/historyStore');
 const { resolveInRepo } = require('./src/resolveInRepo');
+const { findVSCodeExe } = require('./src/editorLocator');
 
 const PROMPT_FILE = path.join(__dirname, 'prompts', 'review-prompt.md');
 
@@ -94,4 +96,32 @@ ipcMain.handle('history:read', () => {
 
 ipcMain.handle('history:record-accept', (_event, historyId) => {
   return incrementAccepted(historyFilePath(), historyId);
+});
+
+ipcMain.handle('dialog:pick-folder', async () => {
+  const win = BrowserWindow.getFocusedWindow();
+  const result = await dialog.showOpenDialog(win, { properties: ['openDirectory'] });
+  return result.canceled ? null : result.filePaths[0];
+});
+
+ipcMain.handle('shell:reveal-repo', (_event, repoPath) => {
+  shell.showItemInFolder(path.resolve(repoPath));
+  return true;
+});
+
+ipcMain.handle('shell:open-in-editor', (_event, { repoPath, file, lines }) => {
+  const absolutePath = resolveInRepo(repoPath, file);
+  if (!fs.existsSync(absolutePath)) {
+    throw new Error(`arquivo não encontrado: ${file}`);
+  }
+  const exe = findVSCodeExe();
+  if (!exe) {
+    throw new Error('VS Code não encontrado (Code.exe)');
+  }
+  const line = String(lines).split('-')[0];
+  return new Promise((resolve, reject) => {
+    execFile(exe, ['--goto', `${absolutePath}:${line}`], { windowsHide: true }, (err) => {
+      if (err) reject(err); else resolve(true);
+    });
+  });
 });

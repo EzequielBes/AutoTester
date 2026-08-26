@@ -26,7 +26,12 @@
         <h2 class="panel-title">Repositório</h2>
         <label>
           Caminho
-          <input type="text" id="repo-path" placeholder="C:\caminho\para\o\repo" />
+          <div class="input-with-buttons">
+            <input type="text" id="repo-path" placeholder="C:\caminho\para\o\repo" list="recent-repos" />
+            <datalist id="recent-repos"></datalist>
+            <button type="button" id="browse-repo-btn" title="Escolher pasta">Procurar</button>
+            <button type="button" id="reveal-repo-btn" title="Abrir no Explorer">Explorer</button>
+          </div>
         </label>
 
         <div class="row">
