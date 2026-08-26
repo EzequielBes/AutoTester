@@ -32,9 +32,13 @@ function applyFinding(fileContent, finding) {
   if (start < 1 || end > lines.length) {
     throw new Error(`line range ${finding.lines} is outside the file (${lines.length} lines)`);
   }
-  const insertedEol = lines[end - 1].eol || '\n';
+  const originalEol = lines[end - 1].eol;
+  const interiorEol = originalEol || '\n';
   const suggestionLines = finding.suggestion.length === 0 ? [] : finding.suggestion.split(/\r\n|\n/);
-  const newEntries = suggestionLines.map((content) => ({ content, eol: insertedEol }));
+  const newEntries = suggestionLines.map((content, idx) => ({
+    content,
+    eol: idx === suggestionLines.length - 1 ? originalEol : interiorEol
+  }));
   lines.splice(start - 1, end - start + 1, ...newEntries);
   return lines.map((line) => line.content + line.eol).join('');
 }

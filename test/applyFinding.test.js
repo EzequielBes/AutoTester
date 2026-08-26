@@ -48,6 +48,12 @@ test('preserves original line endings for lines outside the edited range', () =>
   assert.equal(result, 'A\nb\r\nc\n');
 });
 
+test('preserves a missing trailing newline when replacing the last line', () => {
+  const content = 'a\nb';
+  const result = applyFinding(content, { lines: '2', suggestion: 'X' });
+  assert.equal(result, 'a\nX');
+});
+
 test("rejects a line range one past a trailing-newline file's real last line", () => {
   const content = 'a\nb\nc\n';
   assert.throws(() => applyFinding(content, { lines: '4', suggestion: 'x' }));
