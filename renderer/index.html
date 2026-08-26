@@ -7,5 +7,53 @@
 </head>
 <body>
   <h1>Review GUI</h1>
+
+  <section id="setup">
+    <label>
+      Repositório
+      <input type="text" id="repo-path" placeholder="C:\caminho\para\o\repo" />
+    </label>
+
+    <label>
+      Branch
+      <select id="branch-select"></select>
+    </label>
+
+    <label>
+      <input type="checkbox" id="changed-only" />
+      Só arquivos alterados na branch
+    </label>
+
+    <div id="file-list"></div>
+
+    <label>
+      Skill
+      <select id="skill-select">
+        <option value="general">Review geral</option>
+        <option value="security">Segurança</option>
+        <option value="performance">Performance</option>
+        <option value="tests">Geração de testes</option>
+        <option value="style">Refactor de estilo</option>
+      </select>
+    </label>
+
+    <label>
+      Intensidade
+      <select id="intensity-select">
+        <option value="quick">Rápido</option>
+        <option value="full" selected>Completo</option>
+      </select>
+    </label>
+
+    <button id="load-branches-btn">Carregar branches</button>
+    <button id="load-files-btn">Carregar arquivos</button>
+    <button id="run-btn">Rodar</button>
+  </section>
+
+  <section id="status"></section>
+
+  <section id="results"></section>
+
+  <script src="renderer.js"></script>
 </body>
 </html>

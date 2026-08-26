@@ -3,3 +3,56 @@ body {
   margin: 20px;
   color: #1a1a1a;
 }
+
+label {
+  display: block;
+  margin: 10px 0 4px;
+}
+
+#file-list {
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid #ccc;
+  padding: 8px;
+  margin: 8px 0;
+}
+
+.file-row {
+  display: block;
+}
+
+button {
+  margin: 10px 8px 10px 0;
+}
+
+.finding {
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 10px;
+  margin: 10px 0;
+}
+
+.finding-header {
+  font-weight: bold;
+}
+
+.severity-high { color: #b00020; }
+.severity-medium { color: #b26a00; }
+.severity-low { color: #666; }
+
+.diff-added {
+  background: #e6ffed;
+  white-space: pre-wrap;
+  padding: 4px;
+}
+
+.diff-removed {
+  background: #ffeef0;
+  text-decoration: line-through;
+  white-space: pre-wrap;
+  padding: 4px;
+}
+
+.finding-actions button {
+  margin-right: 8px;
+}
