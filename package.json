@@ -1,0 +1,13 @@
+{
+  "name": "review-gui",
+  "version": "1.0.0",
+  "private": true,
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0"
+  }
+}
