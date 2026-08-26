@@ -25,4 +25,14 @@ function appendHistoryEntry(historyFilePath, entry) {
   return history;
 }
 
-module.exports = { readHistory, appendHistoryEntry };
+function incrementAccepted(historyFilePath, entryId) {
+  const history = readHistory(historyFilePath);
+  const entry = history.find((e) => e.id === entryId);
+  if (entry) {
+    entry.acceptedCount = (entry.acceptedCount || 0) + 1;
+    fs.writeFileSync(historyFilePath, JSON.stringify(history, null, 2));
+  }
+  return history;
+}
+
+module.exports = { readHistory, appendHistoryEntry, incrementAccepted };

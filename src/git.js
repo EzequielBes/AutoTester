@@ -40,4 +40,38 @@ function listChangedFiles(repoPath, branch) {
   return out.split('\n').map((line) => line.trim()).filter(Boolean);
 }
 
-module.exports = { listBranches, listAllFiles, listChangedFiles, detectDefaultBranch };
+function getBranchInfo(repoPath, branch) {
+  const baseBranch = detectDefaultBranch(repoPath);
+  const isBase = branch === baseBranch;
+
+  let ahead = 0;
+  let behind = 0;
+  let changedFiles = 0;
+  if (!isBase) {
+    const counts = git(repoPath, ['rev-list', '--left-right', '--count', `${baseBranch}...${branch}`]).trim();
+    const [behindStr, aheadStr] = counts.split(/\s+/);
+    behind = Number(behindStr) || 0;
+    ahead = Number(aheadStr) || 0;
+    changedFiles = listChangedFiles(repoPath, branch).length;
+  }
+
+  const [hash, author, date, ...subjectParts] = git(repoPath, [
+    'log', '-1', '--format=%H%n%an%n%ad%n%s', '--date=short', branch
+  ]).replace(/\n+$/, '').split('\n');
+
+  return {
+    baseBranch,
+    isBase,
+    ahead,
+    behind,
+    changedFiles,
+    lastCommit: {
+      hash: (hash || '').slice(0, 7),
+      author: author || '',
+      date: date || '',
+      subject: subjectParts.join('\n')
+    }
+  };
+}
+
+module.exports = { listBranches, listAllFiles, listChangedFiles, detectDefaultBranch, getBranchInfo };

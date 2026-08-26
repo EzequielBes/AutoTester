@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { readHistory, appendHistoryEntry } = require('../src/historyStore');
+const { readHistory, appendHistoryEntry, incrementAccepted } = require('../src/historyStore');
 
 function tmpFile() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'history-'));
@@ -42,4 +42,22 @@ test('returns an empty array when the file contains valid JSON that is not an ar
   const file = tmpFile();
   fs.writeFileSync(file, JSON.stringify({}));
   assert.deepEqual(readHistory(file), []);
+});
+
+test('increments acceptedCount for the matching entry only', () => {
+  const file = tmpFile();
+  appendHistoryEntry(file, { id: 'a', acceptedCount: 0 });
+  appendHistoryEntry(file, { id: 'b', acceptedCount: 0 });
+  incrementAccepted(file, 'a');
+  incrementAccepted(file, 'a');
+  const history = readHistory(file);
+  assert.equal(history.find((e) => e.id === 'a').acceptedCount, 2);
+  assert.equal(history.find((e) => e.id === 'b').acceptedCount, 0);
+});
+
+test('increment on an unknown id is a no-op, not a throw', () => {
+  const file = tmpFile();
+  appendHistoryEntry(file, { id: 'a', acceptedCount: 0 });
+  incrementAccepted(file, 'does-not-exist');
+  assert.equal(readHistory(file)[0].acceptedCount, 0);
 });

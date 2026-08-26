@@ -3,12 +3,13 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
+const crypto = require('node:crypto');
 
-const { listBranches, listAllFiles, listChangedFiles } = require('./src/git');
+const { listBranches, listAllFiles, listChangedFiles, getBranchInfo } = require('./src/git');
 const { buildSystemPrompt } = require('./src/promptBuilder');
 const { runClaudeReview } = require('./src/claudeRunner');
 const { applyFinding } = require('./src/applyFinding');
-const { readHistory, appendHistoryEntry } = require('./src/historyStore');
+const { readHistory, appendHistoryEntry, incrementAccepted } = require('./src/historyStore');
 const { resolveInRepo } = require('./src/resolveInRepo');
 
 const PROMPT_FILE = path.join(__dirname, 'prompts', 'review-prompt.md');
@@ -46,6 +47,10 @@ ipcMain.handle('git:list-files', (_event, repoPath, branch, changedOnly) => {
   return changedOnly ? listChangedFiles(repoPath, branch) : listAllFiles(repoPath);
 });
 
+ipcMain.handle('git:branch-info', (_event, repoPath, branch) => {
+  return getBranchInfo(repoPath, branch);
+});
+
 ipcMain.handle('review:run', async (_event, { repoPath, files, skill, intensity }) => {
   const systemPrompt = buildSystemPrompt(PROMPT_FILE, skill, intensity);
 
@@ -60,16 +65,19 @@ ipcMain.handle('review:run', async (_event, { repoPath, files, skill, intensity 
 
   const findings = await runClaudeReview(systemPrompt, content);
 
+  const historyId = crypto.randomUUID();
   appendHistoryEntry(historyFilePath(), {
+    id: historyId,
     timestamp: new Date().toISOString(),
     repoPath,
     files,
     skill,
     intensity,
-    findingsCount: findings.length
+    findingsCount: findings.length,
+    acceptedCount: 0
   });
 
-  return { findings, fileContents };
+  return { findings, fileContents, historyId };
 });
 
 ipcMain.handle('review:apply-finding', (_event, { repoPath, finding }) => {
@@ -82,4 +90,8 @@ ipcMain.handle('review:apply-finding', (_event, { repoPath, finding }) => {
 
 ipcMain.handle('history:read', () => {
   return readHistory(historyFilePath());
+});
+
+ipcMain.handle('history:record-accept', (_event, historyId) => {
+  return incrementAccepted(historyFilePath(), historyId);
 });

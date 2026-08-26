@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
-const { listBranches, listAllFiles, listChangedFiles } = require('../src/git');
+const { listBranches, listAllFiles, listChangedFiles, getBranchInfo } = require('../src/git');
 
 function run(cwd, args) {
   execFileSync('git', args, { cwd });
@@ -59,4 +59,26 @@ test('lists a non-ASCII filename verbatim instead of octal-quoted', () => {
 
   const files = listAllFiles(dir);
   assert.ok(files.includes(accented), `expected ${JSON.stringify(files)} to include ${accented}`);
+});
+
+test('branch info for the default branch has no ahead/behind/changed count', () => {
+  const dir = makeFixtureRepo();
+  const info = getBranchInfo(dir, 'main');
+  assert.equal(info.isBase, true);
+  assert.equal(info.ahead, 0);
+  assert.equal(info.behind, 0);
+  assert.equal(info.changedFiles, 0);
+  assert.equal(info.lastCommit.subject, 'initial');
+});
+
+test('branch info for a feature branch reports ahead count and changed files', () => {
+  const dir = makeFixtureRepo();
+  const info = getBranchInfo(dir, 'feature');
+  assert.equal(info.isBase, false);
+  assert.equal(info.baseBranch, 'main');
+  assert.equal(info.ahead, 1);
+  assert.equal(info.behind, 0);
+  assert.equal(info.changedFiles, 1);
+  assert.equal(info.lastCommit.subject, 'add b');
+  assert.equal(info.lastCommit.hash.length, 7);
 });
