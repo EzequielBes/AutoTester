@@ -10,7 +10,12 @@ function readHistory(historyFilePath) {
   if (raw.trim().length === 0) {
     return [];
   }
-  return JSON.parse(raw);
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
 }
 
 function appendHistoryEntry(historyFilePath, entry) {

@@ -83,7 +83,10 @@ function ConvertTo-Win32Argument {
 function Invoke-ClaudeCli {
     param([string]$SystemPrompt, [string]$Content)
 
-    $rawArgs = @('-p', '--output-format', 'json', '--append-system-prompt', $SystemPrompt, $Content)
+    # Content is piped via stdin rather than passed as a positional argument
+    # (matches src/claudeRunner.js) to stay well under Windows' ~32767-char
+    # CreateProcess command-line limit.
+    $rawArgs = @('-p', '--output-format', 'json', '--append-system-prompt', $SystemPrompt)
     $quotedArgs = $rawArgs | ForEach-Object { ConvertTo-Win32Argument $_ }
 
     $psi = New-Object System.Diagnostics.ProcessStartInfo
@@ -91,15 +94,27 @@ function Invoke-ClaudeCli {
     $psi.Arguments = ($quotedArgs -join ' ')
     $psi.RedirectStandardOutput = $true
     $psi.RedirectStandardError = $true
+    $psi.RedirectStandardInput = $true
+    $psi.StandardOutputEncoding = [System.Text.Encoding]::UTF8
+    $psi.StandardErrorEncoding = [System.Text.Encoding]::UTF8
     $psi.UseShellExecute = $false
 
     $proc = [System.Diagnostics.Process]::Start($psi)
-    $stdoutTask = $proc.StandardOutput.ReadToEndAsync()
-    $stderrTask = $proc.StandardError.ReadToEndAsync()
-    $proc.WaitForExit()
-    $stdout = $stdoutTask.Result
-    $null = $stderrTask.Result
-    return $stdout
+    try {
+        $stdoutTask = $proc.StandardOutput.ReadToEndAsync()
+        $stderrTask = $proc.StandardError.ReadToEndAsync()
+        $proc.StandardInput.Write($Content)
+        $proc.StandardInput.Close()
+        $proc.WaitForExit()
+        $stdout = $stdoutTask.Result
+        $stderr = $stderrTask.Result
+        if ($proc.ExitCode -ne 0) {
+            throw "claude CLI exited with code $($proc.ExitCode): $stderr"
+        }
+        return $stdout
+    } finally {
+        $proc.Dispose()
+    }
 }
 
 if (-not (Test-Path $FilePath)) {
@@ -131,8 +146,6 @@ $results = @()
 for ($run = 1; $run -le $Runs; $run++) {
     Write-Host "Run $run/$Runs..." -ForegroundColor Cyan
 
-    $rawOutput = Invoke-ClaudeCli -SystemPrompt $systemPrompt -Content $content
-
     $record = [ordered]@{
         Run           = $run
         Valid         = $false
@@ -141,6 +154,7 @@ for ($run = 1; $run -le $Runs; $run++) {
     }
 
     try {
+        $rawOutput = Invoke-ClaudeCli -SystemPrompt $systemPrompt -Content $content
         $envelope = $rawOutput | ConvertFrom-Json -ErrorAction Stop
         $parsed = $envelope.result | ConvertFrom-Json -ErrorAction Stop
         $errors = Test-FindingsSchema -Parsed $parsed
@@ -159,7 +173,7 @@ for ($run = 1; $run -le $Runs; $run++) {
 
 $results | Format-Table -AutoSize
 
-$validCount = ($results | Where-Object { $_.Valid }).Count
+$validCount = @($results | Where-Object { $_.Valid }).Count
 $threshold = [math]::Ceiling(2 / 3 * $Runs)
 
 Write-Host ""

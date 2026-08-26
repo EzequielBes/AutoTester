@@ -49,3 +49,14 @@ test('returns no changed files for the default branch itself', () => {
   const changed = listChangedFiles(dir, 'main');
   assert.deepEqual(changed, []);
 });
+
+test('lists a non-ASCII filename verbatim instead of octal-quoted', () => {
+  const dir = makeFixtureRepo();
+  const accented = 'café.txt';
+  fs.writeFileSync(path.join(dir, accented), 'ola\n');
+  run(dir, ['add', accented]);
+  run(dir, ['commit', '-m', 'add accented file']);
+
+  const files = listAllFiles(dir);
+  assert.ok(files.includes(accented), `expected ${JSON.stringify(files)} to include ${accented}`);
+});

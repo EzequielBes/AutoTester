@@ -31,3 +31,15 @@ test('appends a second entry without losing the first', () => {
   assert.equal(history.length, 2);
   assert.equal(history[1].branch, 'feature');
 });
+
+test('returns an empty array when the file is corrupted (non-JSON)', () => {
+  const file = tmpFile();
+  fs.writeFileSync(file, '{not valid json truncated by interrupted write');
+  assert.deepEqual(readHistory(file), []);
+});
+
+test('returns an empty array when the file contains valid JSON that is not an array', () => {
+  const file = tmpFile();
+  fs.writeFileSync(file, JSON.stringify({}));
+  assert.deepEqual(readHistory(file), []);
+});

@@ -24,16 +24,20 @@ document.getElementById('load-branches-btn').addEventListener('click', async () 
     return;
   }
   currentRepoPath = repoPath;
-  const branches = await window.api.listBranches(repoPath);
-  const select = document.getElementById('branch-select');
-  select.innerHTML = '';
-  branches.forEach((branch) => {
-    const option = document.createElement('option');
-    option.value = branch;
-    option.textContent = branch;
-    select.appendChild(option);
-  });
-  setStatus(`${branches.length} branches carregadas.`);
+  try {
+    const branches = await window.api.listBranches(repoPath);
+    const select = document.getElementById('branch-select');
+    select.innerHTML = '';
+    branches.forEach((branch) => {
+      const option = document.createElement('option');
+      option.value = branch;
+      option.textContent = branch;
+      select.appendChild(option);
+    });
+    setStatus(`${branches.length} branches carregadas.`);
+  } catch (err) {
+    setStatus(`Erro: ${err.message}`);
+  }
 });
 
 document.getElementById('load-files-btn').addEventListener('click', async () => {
@@ -44,20 +48,24 @@ document.getElementById('load-files-btn').addEventListener('click', async () => 
     setStatus('Carregue as branches e selecione uma antes.');
     return;
   }
-  const files = await window.api.listFiles(repoPath, branch, changedOnly);
-  const container = document.getElementById('file-list');
-  container.innerHTML = '';
-  files.forEach((file) => {
-    const row = document.createElement('label');
-    row.className = 'file-row';
-    const checkbox = document.createElement('input');
-    checkbox.type = 'checkbox';
-    checkbox.value = file;
-    row.appendChild(checkbox);
-    row.appendChild(document.createTextNode(' ' + file));
-    container.appendChild(row);
-  });
-  setStatus(`${files.length} arquivos carregados.`);
+  try {
+    const files = await window.api.listFiles(repoPath, branch, changedOnly);
+    const container = document.getElementById('file-list');
+    container.innerHTML = '';
+    files.forEach((file) => {
+      const row = document.createElement('label');
+      row.className = 'file-row';
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.value = file;
+      row.appendChild(checkbox);
+      row.appendChild(document.createTextNode(' ' + file));
+      container.appendChild(row);
+    });
+    setStatus(`${files.length} arquivos carregados.`);
+  } catch (err) {
+    setStatus(`Erro: ${err.message}`);
+  }
 });
 
 document.getElementById('run-btn').addEventListener('click', async () => {
@@ -105,6 +113,7 @@ function renderFindings() {
 
     const header = document.createElement('div');
     header.className = 'finding-header';
+    header.classList.add('severity-' + finding.severity);
     header.textContent = `${finding.file}:${finding.lines} [${finding.severity}/${finding.category}]`;
     card.appendChild(header);
 
@@ -157,6 +166,12 @@ async function acceptFinding(id) {
   const finding = currentFindings.find((f) => f.id === id);
   if (!finding || finding.status !== 'pending') return;
 
+  // Set an in-flight sentinel synchronously (before the await) so a second
+  // fast click on the same finding is rejected by the guard above instead
+  // of racing past it and double-applying the edit.
+  finding.status = 'aplicando';
+  renderFindings();
+
   try {
     await window.api.applyFinding({ repoPath: currentRepoPath, finding });
     finding.status = 'aplicado';
@@ -172,6 +187,7 @@ async function acceptFinding(id) {
 
     setStatus(`Finding aplicado em ${finding.file}.`);
   } catch (err) {
+    finding.status = 'pending';
     setStatus(`Erro ao aplicar: ${err.message}`);
   }
   renderFindings();

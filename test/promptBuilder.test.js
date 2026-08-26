@@ -55,3 +55,12 @@ test('throws on unknown intensity', () => {
   const filePath = writeFixture();
   assert.throws(() => buildSystemPrompt(filePath, 'general', 'medium'), /unknown intensity/);
 });
+
+test('every skill/intensity combo resolves against the real prompt file', () => {
+  const real = path.join(__dirname, '..', 'prompts', 'review-prompt.md');
+  for (const s of ['general', 'security', 'performance', 'tests', 'style']) {
+    for (const i of ['quick', 'full']) {
+      assert.ok(buildSystemPrompt(real, s, i).length > 0);
+    }
+  }
+});

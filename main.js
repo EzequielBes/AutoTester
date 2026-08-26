@@ -9,6 +9,7 @@ const { buildSystemPrompt } = require('./src/promptBuilder');
 const { runClaudeReview } = require('./src/claudeRunner');
 const { applyFinding } = require('./src/applyFinding');
 const { readHistory, appendHistoryEntry } = require('./src/historyStore');
+const { resolveInRepo } = require('./src/resolveInRepo');
 
 const PROMPT_FILE = path.join(__dirname, 'prompts', 'review-prompt.md');
 
@@ -50,7 +51,7 @@ ipcMain.handle('review:run', async (_event, { repoPath, files, skill, intensity 
 
   const fileContents = {};
   files.forEach((relativePath) => {
-    const absolutePath = path.join(repoPath, relativePath);
+    const absolutePath = resolveInRepo(repoPath, relativePath);
     fileContents[relativePath] = fs.readFileSync(absolutePath, 'utf8');
   });
   const content = Object.entries(fileContents)
@@ -72,7 +73,7 @@ ipcMain.handle('review:run', async (_event, { repoPath, files, skill, intensity 
 });
 
 ipcMain.handle('review:apply-finding', (_event, { repoPath, finding }) => {
-  const absolutePath = path.join(repoPath, finding.file);
+  const absolutePath = resolveInRepo(repoPath, finding.file);
   const original = fs.readFileSync(absolutePath, 'utf8');
   const updated = applyFinding(original, finding);
   fs.writeFileSync(absolutePath, updated);

@@ -31,8 +31,7 @@ function runClaudeReview(systemPrompt, content) {
     const child = spawn('claude', [
       '-p',
       '--output-format', 'json',
-      '--append-system-prompt', systemPrompt,
-      content
+      '--append-system-prompt', systemPrompt
     ], { windowsHide: true });
 
     let stdout = '';
@@ -40,6 +39,8 @@ function runClaudeReview(systemPrompt, content) {
     child.stdout.on('data', (chunk) => { stdout += chunk; });
     child.stderr.on('data', (chunk) => { stderr += chunk; });
     child.on('error', reject);
+    child.stdin.on('error', () => {}); // child died; 'close' below reports the real reason
+    child.stdin.end(content);
     child.on('close', (code) => {
       if (code !== 0) {
         reject(new Error(`claude CLI exited with code ${code}: ${stderr}`));

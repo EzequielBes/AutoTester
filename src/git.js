@@ -3,7 +3,10 @@
 const { execFileSync } = require('node:child_process');
 
 function git(repoPath, args) {
-  return execFileSync('git', args, { cwd: repoPath, encoding: 'utf8' });
+  // core.quotePath=false: without it, git octal-escapes non-ASCII filenames
+  // (e.g. "café.js" -> "caf\303\251.js") in ls-files/diff output, which then
+  // fail to open as real paths.
+  return execFileSync('git', ['-c', 'core.quotePath=false', ...args], { cwd: repoPath, encoding: 'utf8' });
 }
 
 function listBranches(repoPath) {
