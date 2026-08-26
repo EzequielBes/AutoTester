@@ -49,6 +49,57 @@ function Test-FindingsSchema {
     return $errors
 }
 
+function ConvertTo-Win32Argument {
+    param([string]$Arg)
+    if ($Arg.Length -gt 0 -and $Arg -notmatch '[\s"]') {
+        return $Arg
+    }
+    $sb = New-Object System.Text.StringBuilder
+    [void]$sb.Append('"')
+    $len = $Arg.Length
+    $i = 0
+    while ($i -lt $len) {
+        $numBackslashes = 0
+        while ($i -lt $len -and $Arg[$i] -eq '\') {
+            $numBackslashes++
+            $i++
+        }
+        if ($i -eq $len) {
+            [void]$sb.Append('\' * ($numBackslashes * 2))
+        } elseif ($Arg[$i] -eq '"') {
+            [void]$sb.Append('\' * ($numBackslashes * 2 + 1))
+            [void]$sb.Append('"')
+            $i++
+        } else {
+            [void]$sb.Append('\' * $numBackslashes)
+            [void]$sb.Append($Arg[$i])
+            $i++
+        }
+    }
+    [void]$sb.Append('"')
+    return $sb.ToString()
+}
+
+function Invoke-ClaudeCli {
+    param([string]$SystemPrompt, [string]$Content)
+
+    $rawArgs = @('-p', '--output-format', 'json', '--append-system-prompt', $SystemPrompt, $Content)
+    $quotedArgs = $rawArgs | ForEach-Object { ConvertTo-Win32Argument $_ }
+
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = 'claude'
+    $psi.Arguments = ($quotedArgs -join ' ')
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $psi.UseShellExecute = $false
+
+    $proc = [System.Diagnostics.Process]::Start($psi)
+    $stdout = $proc.StandardOutput.ReadToEnd()
+    $null = $proc.StandardError.ReadToEnd()
+    $proc.WaitForExit()
+    return $stdout
+}
+
 if (-not (Test-Path $FilePath)) {
     throw "File not found: $FilePath"
 }
@@ -78,8 +129,7 @@ $results = @()
 for ($run = 1; $run -le $Runs; $run++) {
     Write-Host "Run $run/$Runs..." -ForegroundColor Cyan
 
-    $argsList = @('-p', '--output-format', 'json', '--append-system-prompt', $systemPrompt, $content)
-    $rawOutput = & claude @argsList 2>$null
+    $rawOutput = Invoke-ClaudeCli -SystemPrompt $systemPrompt -Content $content
 
     $record = [ordered]@{
         Run           = $run
