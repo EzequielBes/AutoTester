@@ -3,22 +3,58 @@
 const { spawn, execFile } = require('node:child_process');
 
 const MAX_LOG_CHARS = 256 * 1024;
+const UNIX_TERMINATION_GRACE_MS = 2000;
 
-function appendTail(existing, chunk) {
+function appendTail(existing, chunk, maxChars = MAX_LOG_CHARS) {
   const combined = existing + chunk.toString();
-  return combined.length > MAX_LOG_CHARS ? combined.slice(-MAX_LOG_CHARS) : combined;
+  return combined.length > maxChars ? combined.slice(-maxChars) : combined;
 }
 
-function terminateProcessTree(child, execFileImpl = execFile) {
-  if (!child.pid) return;
-  if (process.platform === 'win32') {
+function terminateProcessTree(child, options = {}) {
+  const resolvedOptions = typeof options === 'function' ? { execFileImpl: options } : options;
+  const {
+    execFileImpl = execFile,
+    platform = process.platform,
+    killImpl = process.kill.bind(process),
+    setTimeoutImpl = setTimeout,
+    clearTimeoutImpl = clearTimeout,
+    graceMs = UNIX_TERMINATION_GRACE_MS,
+    processGroup = false
+  } = resolvedOptions;
+  if (!child?.pid) return () => {};
+  if (platform === 'win32') {
     execFileImpl('taskkill', ['/pid', String(child.pid), '/t', '/f'], { windowsHide: true }, () => {});
-  } else {
-    child.kill('SIGTERM');
+    return () => {};
   }
+  const target = processGroup ? -child.pid : child.pid;
+  let timer;
+  let stopped = false;
+  const stop = () => {
+    if (stopped) return;
+    stopped = true;
+    if (timer) clearTimeoutImpl(timer);
+    child.removeListener?.('close', stop);
+    child.removeListener?.('error', stop);
+  };
+  const send = (signal) => {
+    try {
+      killImpl(target, signal);
+    } catch {
+      // The process may have exited between the stop request and signal delivery.
+    }
+  };
+  send('SIGTERM');
+  timer = setTimeoutImpl(() => {
+    if (stopped) return;
+    send('SIGKILL');
+    stop();
+  }, graceMs);
+  child.once?.('close', stop);
+  child.once?.('error', stop);
+  return stop;
 }
 
-function runCommand({ command, cwd, timeoutMs, signal, spawnImpl = spawn, now = Date.now, terminate = terminateProcessTree }) {
+function runCommand({ command, cwd, timeoutMs, signal, spawnImpl = spawn, now = Date.now, terminate = terminateProcessTree, platform = process.platform }) {
   return new Promise((resolve) => {
     if (signal?.aborted) {
       resolve({ exitCode: null, signal: null, timedOut: false, cancelled: true, durationMs: 0, stdout: '', stderr: '', error: null });
@@ -33,14 +69,23 @@ function runCommand({ command, cwd, timeoutMs, signal, spawnImpl = spawn, now = 
     let finished = false;
     let spawnError = null;
     let timeout;
+    let terminationRequested = false;
+    let stopTermination = () => {};
+    const requestTermination = () => {
+      if (terminationRequested) return;
+      terminationRequested = true;
+      const stop = terminate(child, { platform, processGroup: platform !== 'win32' });
+      if (typeof stop === 'function') stopTermination = stop;
+    };
     const abortListener = () => {
       cancelled = true;
-      terminate(child);
+      requestTermination();
     };
     const finish = (exitCode, childSignal) => {
       if (finished) return;
       finished = true;
       if (timeout) clearTimeout(timeout);
+      stopTermination();
       signal?.removeEventListener('abort', abortListener);
       resolve({
         exitCode,
@@ -55,13 +100,13 @@ function runCommand({ command, cwd, timeoutMs, signal, spawnImpl = spawn, now = 
     };
 
     try {
-      const shell = process.platform === 'win32'
+      const shell = platform === 'win32'
         ? process.env.ComSpec || 'cmd.exe'
         : '/bin/sh';
-      const args = process.platform === 'win32'
+      const args = platform === 'win32'
         ? ['/d', '/s', '/c', command]
         : ['-lc', command];
-      child = spawnImpl(shell, args, { cwd, windowsHide: true });
+      child = spawnImpl(shell, args, { cwd, windowsHide: true, detached: platform !== 'win32' });
     } catch (error) {
       spawnError = error;
       finish(null, null);
@@ -70,7 +115,7 @@ function runCommand({ command, cwd, timeoutMs, signal, spawnImpl = spawn, now = 
 
     timeout = setTimeout(() => {
       timedOut = true;
-      terminate(child);
+      requestTermination();
     }, timeoutMs);
     signal?.addEventListener('abort', abortListener, { once: true });
     child.stdout?.on('data', (chunk) => { stdout = appendTail(stdout, chunk); });
@@ -83,4 +128,4 @@ function runCommand({ command, cwd, timeoutMs, signal, spawnImpl = spawn, now = 
   });
 }
 
-module.exports = { MAX_LOG_CHARS, appendTail, terminateProcessTree, runCommand };
+module.exports = { MAX_LOG_CHARS, UNIX_TERMINATION_GRACE_MS, appendTail, terminateProcessTree, runCommand };

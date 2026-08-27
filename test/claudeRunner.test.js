@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { EventEmitter } = require('node:events');
-const { parseCliOutput, runClaudeReview } = require('../src/claudeRunner');
+const { MAX_CLAUDE_STDOUT_CHARS, MAX_CLAUDE_STDERR_CHARS, parseCliOutput, runClaudeReview } = require('../src/claudeRunner');
 
 function slowChild() {
   const child = new EventEmitter();
@@ -65,4 +65,29 @@ test('terminates Claude when the track is cancelled', async () => {
   controller.abort();
 
   await assert.rejects(execution, (error) => error.code === 'TRACK_CANCELLED');
+});
+
+test('terminates Claude when its JSON output exceeds the configured limit', async () => {
+  const child = slowChild();
+  let terminated = false;
+  const execution = runClaudeReview('prompt', 'content', {
+    spawnImpl: () => child,
+    terminate: () => { terminated = true; child.emit('close', null); }
+  });
+  child.stdout.emit('data', 'x'.repeat(MAX_CLAUDE_STDOUT_CHARS + 1));
+
+  await assert.rejects(execution, (error) => error.code === 'CLAUDE_OUTPUT_TOO_LARGE');
+  assert.equal(terminated, true);
+});
+
+test('limits Claude stderr to its configured tail', async () => {
+  const child = slowChild();
+  const execution = runClaudeReview('prompt', 'content', { spawnImpl: () => child });
+  child.stderr.emit('data', `${'x'.repeat(MAX_CLAUDE_STDERR_CHARS)}tail`);
+  child.emit('close', 1);
+
+  await assert.rejects(execution, (error) => {
+    assert.equal(error.message.includes('x'.repeat(MAX_CLAUDE_STDERR_CHARS)), false);
+    return error.message.endsWith('tail');
+  });
 });

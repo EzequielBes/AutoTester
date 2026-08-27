@@ -2,9 +2,11 @@
 
 const { spawn } = require('node:child_process');
 const { validateFindings } = require('./findingsSchema');
-const { terminateProcessTree } = require('./commandRunner');
+const { MAX_LOG_CHARS, appendTail, terminateProcessTree } = require('./commandRunner');
 
 const DEFAULT_CLAUDE_TIMEOUT_MS = 600000;
+const MAX_CLAUDE_STDOUT_CHARS = 2 * 1024 * 1024;
+const MAX_CLAUDE_STDERR_CHARS = MAX_LOG_CHARS;
 
 function parseCliOutput(stdout) {
   let envelope;
@@ -87,8 +89,17 @@ function runClaudeReview(systemPrompt, content, {
     }, timeoutMs);
     signal?.addEventListener('abort', abortListener, { once: true });
     if (signal?.aborted) abortListener();
-    child.stdout?.on('data', (chunk) => { stdout += chunk; });
-    child.stderr?.on('data', (chunk) => { stderr += chunk; });
+    child.stdout?.on('data', (chunk) => {
+      const output = chunk.toString();
+      if (stdout.length + output.length > MAX_CLAUDE_STDOUT_CHARS) {
+        const error = new Error(`Claude CLI output exceeded ${MAX_CLAUDE_STDOUT_CHARS} characters`);
+        error.code = 'CLAUDE_OUTPUT_TOO_LARGE';
+        requestStop(error);
+        return;
+      }
+      stdout += output;
+    });
+    child.stderr?.on('data', (chunk) => { stderr = appendTail(stderr, chunk, MAX_CLAUDE_STDERR_CHARS); });
     child.on('error', (error) => finish(() => reject(stopError || error)));
     child.stdin?.on('error', () => {});
     child.stdin?.end(content);
@@ -109,4 +120,4 @@ function runClaudeReview(systemPrompt, content, {
   });
 }
 
-module.exports = { DEFAULT_CLAUDE_TIMEOUT_MS, parseCliOutput, runClaudeReview };
+module.exports = { DEFAULT_CLAUDE_TIMEOUT_MS, MAX_CLAUDE_STDOUT_CHARS, MAX_CLAUDE_STDERR_CHARS, parseCliOutput, runClaudeReview };
