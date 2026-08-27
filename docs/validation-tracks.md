@@ -16,6 +16,6 @@ Um gate de cobertura pode exigir minimo de linhas, limitar queda em pontos perce
 
 ## Auditoria
 
-O Log preserva findings, decisoes, status, cobertura, gate e caudas limitadas de logs. A reabertura e somente leitura. Relatorios JSON e Markdown removem conteudo de arquivos, sugestoes, comandos, erros e logs brutos, caminhos locais absolutos e tokens de aplicacao. Eles mantem caminhos relativos dos findings para que a evidencia possa ser localizada.
+O Log preserva findings, decisoes, status, cobertura e gate. Logs de comando nao sao persistidos por padrao; habilite essa opcao somente quando eles forem necessarios para auditoria, pois podem conter segredos. A reabertura e somente leitura. Relatorios JSON e Markdown removem conteudo de arquivos, sugestoes, comandos, erros e logs brutos, caminhos locais absolutos e tokens de aplicacao. Eles mantem caminhos relativos dos findings para que a evidencia possa ser localizada.
 
 Use os filtros de texto, tipo, status e periodo para localizar execucoes. A retencao e configurada no mesmo painel e remove as entradas mais antigas assim que o limite e salvo.

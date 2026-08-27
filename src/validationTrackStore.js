@@ -46,6 +46,9 @@ function validateCommandPhase(phase) {
   if (!Number.isInteger(phase.expectedExitCode) || phase.expectedExitCode < 0 || phase.expectedExitCode > 255) {
     throw new Error('phase.expectedExitCode must be between 0 and 255');
   }
+  if (phase.persistLogs !== undefined && typeof phase.persistLogs !== 'boolean') {
+    throw new Error('phase.persistLogs must be a boolean');
+  }
   if (phase.coverageGate !== undefined && phase.coverageGate !== null) {
     const gate = phase.coverageGate;
     if (!phase.lcovPath) throw new Error('phase.coverageGate requires phase.lcovPath');

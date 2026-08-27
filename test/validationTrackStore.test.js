@@ -102,3 +102,14 @@ test('rejects a coverage gate without an LCOV path', () => {
   }];
   assert.throws(() => validateTrack(invalid), /requires phase.lcovPath/);
 });
+
+test('accepts opt-in log persistence and rejects malformed values', () => {
+  const valid = track();
+  valid.phases = [{
+    id: 'tests', type: 'command', name: 'Tests', command: 'npm test', timeoutMs: 600000,
+    lcovPath: '', expectedExitCode: 0, persistLogs: true
+  }];
+  assert.doesNotThrow(() => validateTrack(valid));
+  valid.phases[0].persistLogs = 'yes';
+  assert.throws(() => validateTrack(valid), /persistLogs must be a boolean/);
+});

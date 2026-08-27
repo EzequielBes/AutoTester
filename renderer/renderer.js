@@ -418,6 +418,16 @@ function createPhaseEditor(phase = {}) {
   commandRow.appendChild(exitCodeLabel);
   commandFields.appendChild(commandRow);
 
+  const persistLogsLabel = document.createElement('label');
+  persistLogsLabel.className = 'checkbox-label';
+  persistLogsLabel.textContent = 'Salvar logs no histórico (podem conter segredos)';
+  const persistLogsInput = document.createElement('input');
+  persistLogsInput.type = 'checkbox';
+  persistLogsInput.className = 'phase-persist-logs';
+  persistLogsInput.checked = phase.persistLogs === true;
+  persistLogsLabel.appendChild(persistLogsInput);
+  commandFields.appendChild(persistLogsLabel);
+
   const lcovLabel = document.createElement('label');
   lcovLabel.textContent = 'Arquivo LCOV (opcional)';
   const lcovInput = document.createElement('input');
@@ -676,6 +686,7 @@ function getTrackDraft() {
         timeoutMs: Number(editor.querySelector('.phase-timeout').value) * 1000,
         expectedExitCode: Number(editor.querySelector('.phase-exit-code').value),
         lcovPath: editor.querySelector('.phase-lcov-path').value.trim(),
+        persistLogs: editor.querySelector('.phase-persist-logs').checked,
         coverageGate
       };
     }

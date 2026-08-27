@@ -538,11 +538,13 @@ ipcMain.handle('validation-tracks:run', async (event, { executionId, trackId, re
       error: phase.error,
       parallel: phase.parallel,
       criteria: definition.criteria || '',
-      logs: phase.commandResult ? {
-        stdout: phase.commandResult.stdout.slice(-16384),
-        stderr: phase.commandResult.stderr.slice(-16384),
-        truncated: phase.commandResult.stdout.length > 16384 || phase.commandResult.stderr.length > 16384
-      } : null
+      ...(definition.persistLogs === true && phase.commandResult ? {
+        logs: {
+          stdout: phase.commandResult.stdout.slice(-16384),
+          stderr: phase.commandResult.stderr.slice(-16384),
+          truncated: phase.commandResult.stdout.length > 16384 || phase.commandResult.stderr.length > 16384
+        }
+      } : {})
     });
     return { ...phase, historyId };
   });
