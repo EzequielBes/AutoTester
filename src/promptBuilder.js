@@ -26,7 +26,7 @@ const INTENSITY_HEADINGS = {
   full: 'Intensity: full'
 };
 
-function buildSystemPrompt(promptFilePath, skill, intensity, criteria = '') {
+function buildSystemPrompt(promptFilePath, skill, intensity, criteria = '', profileInstructions = '', skillInstructions = '') {
   const skillHeading = SKILL_HEADINGS[skill];
   const intensityHeading = INTENSITY_HEADINGS[intensity];
   if (!skillHeading) throw new Error(`unknown skill: ${skill}`);
@@ -45,7 +45,13 @@ function buildSystemPrompt(promptFilePath, skill, intensity, criteria = '') {
   const criteriaBlock = criteria.trim()
     ? `Critérios adicionais definidos para esta fase:\n${criteria.trim()}`
     : '';
-  return [base, skillBlock, intensityBlock, criteriaBlock].filter(Boolean).join('\n\n');
+  const profileBlock = profileInstructions.trim()
+    ? `Instruções do perfil selecionado:\n${profileInstructions.trim()}`
+    : '';
+  const customSkillBlock = skillInstructions.trim()
+    ? `Instruções da skill selecionada:\n${skillInstructions.trim()}`
+    : '';
+  return [base, skillBlock, intensityBlock, profileBlock, customSkillBlock, criteriaBlock].filter(Boolean).join('\n\n');
 }
 
 module.exports = { buildSystemPrompt, parseSections, SKILL_HEADINGS, INTENSITY_HEADINGS };

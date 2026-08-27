@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { readHistory, appendHistoryEntry, incrementAccepted } = require('../src/historyStore');
+const { readHistory, readHistoryEntry, appendHistoryEntry, recordFindingDecision } = require('../src/historyStore');
 
 function tmpFile() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'history-'));
@@ -32,32 +32,52 @@ test('appends a second entry without losing the first', () => {
   assert.equal(history[1].branch, 'feature');
 });
 
-test('returns an empty array when the file is corrupted (non-JSON)', () => {
+test('rejects a corrupted history file instead of silently discarding it', () => {
   const file = tmpFile();
   fs.writeFileSync(file, '{not valid json truncated by interrupted write');
-  assert.deepEqual(readHistory(file), []);
+  assert.throws(() => readHistory(file), /storage is corrupted/);
 });
 
-test('returns an empty array when the file contains valid JSON that is not an array', () => {
+test('rejects a history file with an unsupported schema', () => {
   const file = tmpFile();
   fs.writeFileSync(file, JSON.stringify({}));
-  assert.deepEqual(readHistory(file), []);
+  assert.throws(() => readHistory(file), /unsupported schema/);
 });
 
-test('increments acceptedCount for the matching entry only', () => {
+test('reads a detailed history entry by id', () => {
   const file = tmpFile();
-  appendHistoryEntry(file, { id: 'a', acceptedCount: 0 });
-  appendHistoryEntry(file, { id: 'b', acceptedCount: 0 });
-  incrementAccepted(file, 'a');
-  incrementAccepted(file, 'a');
-  const history = readHistory(file);
-  assert.equal(history.find((e) => e.id === 'a').acceptedCount, 2);
-  assert.equal(history.find((e) => e.id === 'b').acceptedCount, 0);
+  appendHistoryEntry(file, {
+    id: 'audit-1',
+    kind: 'review',
+    findings: [{ file: 'src/a.js', lines: '1', severity: 'low', category: 'style', message: 'x', suggestion: '' }],
+    criteria: 'Keep public API stable.'
+  });
+
+  const entry = readHistoryEntry(file, 'audit-1');
+  assert.equal(entry.criteria, 'Keep public API stable.');
+  assert.equal(entry.findings.length, 1);
 });
 
-test('increment on an unknown id is a no-op, not a throw', () => {
+test('records decisions by finding index and derives the accepted count', () => {
   const file = tmpFile();
-  appendHistoryEntry(file, { id: 'a', acceptedCount: 0 });
-  incrementAccepted(file, 'does-not-exist');
-  assert.equal(readHistory(file)[0].acceptedCount, 0);
+  appendHistoryEntry(file, {
+    id: 'audit-1',
+    acceptedCount: 0,
+    findings: [{ message: 'first' }, { message: 'second' }]
+  });
+  recordFindingDecision(file, 'audit-1', 0, 'applied');
+  recordFindingDecision(file, 'audit-1', 1, 'rejected');
+  recordFindingDecision(file, 'audit-1', 0, 'rejected');
+
+  const entry = readHistoryEntry(file, 'audit-1');
+  assert.equal(entry.acceptedCount, 0);
+  assert.deepEqual(entry.decisions.map((decision) => decision.outcome).sort(), ['rejected', 'rejected']);
+});
+
+test('rejects decisions outside the entry finding range', () => {
+  const file = tmpFile();
+  appendHistoryEntry(file, { id: 'audit-1', findings: [{ message: 'first' }] });
+  assert.throws(() => recordFindingDecision(file, 'audit-1', 1, 'applied'), /index is invalid/);
+  assert.throws(() => recordFindingDecision(file, 'audit-1', -1, 'applied'), /index is invalid/);
+  assert.throws(() => recordFindingDecision(file, 'audit-1', 0.5, 'applied'), /index is invalid/);
 });

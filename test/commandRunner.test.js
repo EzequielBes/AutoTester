@@ -68,3 +68,24 @@ test('terminates a command after its timeout', async () => {
   assert.equal(terminated, true);
   assert.equal(result.timedOut, true);
 });
+
+test('terminates a command when the track is cancelled', async () => {
+  const child = new EventEmitter();
+  child.pid = 4321;
+  child.stdout = new EventEmitter();
+  child.stderr = new EventEmitter();
+  const controller = new AbortController();
+  const execution = runCommand({
+    command: 'slow',
+    cwd: 'C:\\repo',
+    timeoutMs: 1000,
+    signal: controller.signal,
+    spawnImpl: () => child,
+    terminate: () => child.emit('close', null, 'SIGTERM')
+  });
+  controller.abort();
+
+  const result = await execution;
+  assert.equal(result.cancelled, true);
+  assert.equal(result.timedOut, false);
+});

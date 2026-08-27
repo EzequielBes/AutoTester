@@ -42,13 +42,15 @@ test('writes a versioned track store and reads it back', () => {
   writeValidationTracks(file, tracks);
 
   assert.deepEqual(readValidationTracks(file), tracks);
-  assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).version, 2);
+  assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).version, 3);
 });
 
-test('rejects an unsupported phase agent', () => {
+test('accepts a profile id and rejects a missing phase agent id', () => {
   const invalid = track();
   invalid.phases[0].agent = 'other-agent';
-  assert.throws(() => validateTrack(invalid), /agent is not supported/);
+  assert.doesNotThrow(() => validateTrack(invalid));
+  invalid.phases[0].agent = '';
+  assert.throws(() => validateTrack(invalid), /agent must be a non-empty string/);
 });
 
 test('rejects a corrupted track store instead of silently discarding it', () => {
@@ -78,4 +80,25 @@ test('rejects command phases with a coverage path outside the repository', () =>
     expectedExitCode: 0
   }];
   assert.throws(() => validateTrack(invalid), /must stay inside the repository/);
+});
+
+test('rejects a Claude phase with a non-boolean parallel setting', () => {
+  const invalid = track();
+  invalid.phases[0].parallel = 'yes';
+  assert.throws(() => validateTrack(invalid), /parallel must be a boolean/);
+});
+
+test('rejects a coverage gate without an LCOV path', () => {
+  const invalid = track();
+  invalid.phases = [{
+    id: 'tests',
+    type: 'command',
+    name: 'Tests',
+    command: 'npm test',
+    timeoutMs: 600000,
+    lcovPath: '',
+    expectedExitCode: 0,
+    coverageGate: { minLinesPct: 80, maxDropPct: null, fileScope: 'all' }
+  }];
+  assert.throws(() => validateTrack(invalid), /requires phase.lcovPath/);
 });

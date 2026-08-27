@@ -101,6 +101,7 @@
           <button id="load-files-btn">Carregar arquivos</button>
           <button id="run-btn" class="primary">Executar análise</button>
           <button id="run-track-btn">Executar trilha</button>
+          <button id="cancel-track-btn" disabled>Cancelar trilha</button>
         </div>
       </div>
 
@@ -118,7 +119,7 @@
 
       <div id="status" class="status"></div>
 
-      <section id="phase-results"></section>
+      <section id="phase-results" aria-live="polite"></section>
       <section id="results"></section>
     </section>
 
@@ -129,7 +130,7 @@
           Nome
           <input type="text" id="track-name" placeholder="Ex.: Pré-merge" maxlength="100" />
         </label>
-        <p class="helper-text">As fases usam o mesmo snapshot de branch e arquivos. Comandos de teste são executados no working tree atual: não salve segredos nos argumentos.</p>
+        <p class="helper-text">Fases Claude marcadas como paralelas compartilham o snapshot e rodam em lotes de até 2 subagentes. Comandos de teste continuam sequenciais no working tree atual: não salve segredos nos argumentos.</p>
         <div id="track-phase-list"></div>
         <div class="actions">
           <button id="new-track-btn">Nova trilha</button>
@@ -142,11 +143,70 @@
         <h2 class="panel-title">Trilhas salvas</h2>
         <div id="track-list"></div>
       </div>
+      <div class="panel bracket" style="--d: 2">
+        <h2 class="panel-title">Perfis Claude</h2>
+        <label>
+          Nome
+          <input type="text" id="agent-profile-name" placeholder="Ex.: Especialista em segurança" maxlength="100" />
+        </label>
+        <label>
+          Instruções do perfil
+          <textarea id="agent-profile-instructions" maxlength="4000" placeholder="Ex.: Priorize controles de acesso e dados sensíveis."></textarea>
+        </label>
+        <div class="actions">
+          <button id="new-agent-profile-btn">Novo perfil</button>
+          <button id="save-agent-profile-btn" class="primary">Salvar perfil</button>
+          <button id="delete-agent-profile-btn">Excluir perfil</button>
+        </div>
+        <div id="agent-profile-list"></div>
+      </div>
+      <div class="panel bracket" style="--d: 3">
+        <h2 class="panel-title">Skills de qualidade</h2>
+        <label>
+          Nome
+          <input type="text" id="quality-skill-name" placeholder="Ex.: Revisão de acessibilidade" maxlength="100" />
+        </label>
+        <label>
+          Base de análise
+          <select id="quality-skill-base">
+            <option value="general">Review geral</option>
+            <option value="security">Segurança</option>
+            <option value="performance">Performance</option>
+            <option value="tests">Geração de testes</option>
+            <option value="style">Refactor de estilo</option>
+          </select>
+        </label>
+        <label>
+          Instruções da skill
+          <textarea id="quality-skill-instructions" maxlength="4000" placeholder="Defina o foco e os critérios da análise."></textarea>
+        </label>
+        <div class="actions">
+          <button id="new-quality-skill-btn">Nova skill</button>
+          <button id="save-quality-skill-btn" class="primary">Salvar skill</button>
+          <button id="delete-quality-skill-btn">Excluir skill</button>
+        </div>
+        <div id="quality-skill-list"></div>
+      </div>
     </section>
 
     <section id="view-history" class="view hidden">
+      <div class="panel bracket" style="--d: 0">
+        <h2 class="panel-title">Filtros e retenção</h2>
+        <div class="row">
+          <label class="grow">Buscar<input type="text" id="history-query" placeholder="Branch, trilha ou skill" /></label>
+          <label class="grow">Tipo<select id="history-kind-filter"><option value="">Todos</option><option value="review">Review</option><option value="validation-command">Comando</option></select></label>
+          <label class="grow">Status<select id="history-status-filter"><option value="">Todos</option><option value="passed">Aprovado</option><option value="failed">Falhou</option><option value="cancelled">Cancelado</option><option value="timed-out">Timeout</option></select></label>
+        </div>
+        <div class="row">
+          <label class="grow">De<input type="date" id="history-from-filter" /></label>
+          <label class="grow">Até<input type="date" id="history-to-filter" /></label>
+          <label class="grow">Manter últimas execuções<input type="number" id="history-retention" min="10" max="10000" step="1" /></label>
+        </div>
+        <div class="actions"><button type="button" id="save-history-settings-btn">Salvar retenção</button></div>
+      </div>
       <div class="panel bracket" id="history-summary" style="--d: 0"></div>
       <div id="history-list"></div>
+      <section id="history-details" class="panel bracket hidden" style="--d: 1"></section>
     </section>
   </main>
 

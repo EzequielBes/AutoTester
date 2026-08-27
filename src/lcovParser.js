@@ -67,4 +67,13 @@ function readLcovCoverage(repoPath, lcovPath) {
   return parseLcov(fs.readFileSync(absolutePath, 'utf8'), repoPath);
 }
 
-module.exports = { MAX_LCOV_BYTES, parseLcov, readLcovCoverage };
+function selectCoverageFiles(coverage, selectedFiles) {
+  const selected = new Set(selectedFiles.map((file) => file.replace(/\\/g, '/')));
+  const files = coverage.files.filter((file) => selected.has(file.file));
+  const found = files.reduce((total, file) => total + file.lines.found, 0);
+  const hit = files.reduce((total, file) => total + file.lines.hit, 0);
+  if (found === 0) throw new Error('selected files have no instrumented LCOV lines');
+  return { lines: { found, hit, pct: percentage(hit, found) }, files };
+}
+
+module.exports = { MAX_LCOV_BYTES, parseLcov, readLcovCoverage, selectCoverageFiles };

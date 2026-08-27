@@ -1,6 +1,18 @@
-# review-gui
+# AutoTester
 
-A local Electron GUI for running code review over a git repo via the `claude` CLI in headless mode. Pick a branch, a set of files, a review skill, and an intensity level; each finding the model returns can be individually accepted (applied to disk) or rejected — nothing is written to disk without a per-finding decision.
+Aplicação Electron local para validar qualidade de repositórios Git com Claude CLI, trilhas de validação, subagentes paralelos, testes por comando, cobertura LCOV e histórico auditável.
+
+## Capacidades
+
+- Seleção de branch, pastas, arquivos e filtros glob.
+- Trilhas com fases Claude ou comandos de teste, perfis de agente e skills editáveis.
+- Subagentes Claude paralelos, com limite de duas fases simultâneas.
+- Cobertura LCOV com mínimos, tolerância de queda e baseline local.
+- Progresso, timeout e cancelamento de trilhas.
+- Histórico somente leitura com findings, decisões, cobertura, gates, logs limitados e exportação JSON/Markdown.
+- Log filtrável por texto, tipo, status e período, com retenção local configurável.
+
+Veja `docs/architecture.md` e `docs/validation-tracks.md` para o modelo e limites operacionais.
 
 ## Requirements
 

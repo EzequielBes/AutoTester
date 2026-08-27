@@ -18,24 +18,35 @@ function terminateProcessTree(child, execFileImpl = execFile) {
   }
 }
 
-function runCommand({ command, cwd, timeoutMs, spawnImpl = spawn, now = Date.now, terminate = terminateProcessTree }) {
+function runCommand({ command, cwd, timeoutMs, signal, spawnImpl = spawn, now = Date.now, terminate = terminateProcessTree }) {
   return new Promise((resolve) => {
+    if (signal?.aborted) {
+      resolve({ exitCode: null, signal: null, timedOut: false, cancelled: true, durationMs: 0, stdout: '', stderr: '', error: null });
+      return;
+    }
     const startedAt = now();
     let child;
     let stdout = '';
     let stderr = '';
     let timedOut = false;
+    let cancelled = false;
     let finished = false;
     let spawnError = null;
     let timeout;
-    const finish = (exitCode, signal) => {
+    const abortListener = () => {
+      cancelled = true;
+      terminate(child);
+    };
+    const finish = (exitCode, childSignal) => {
       if (finished) return;
       finished = true;
       if (timeout) clearTimeout(timeout);
+      signal?.removeEventListener('abort', abortListener);
       resolve({
         exitCode,
-        signal,
+        signal: childSignal,
         timedOut,
+        cancelled,
         durationMs: now() - startedAt,
         stdout,
         stderr,
@@ -61,6 +72,7 @@ function runCommand({ command, cwd, timeoutMs, spawnImpl = spawn, now = Date.now
       timedOut = true;
       terminate(child);
     }, timeoutMs);
+    signal?.addEventListener('abort', abortListener, { once: true });
     child.stdout?.on('data', (chunk) => { stdout = appendTail(stdout, chunk); });
     child.stderr?.on('data', (chunk) => { stderr = appendTail(stderr, chunk); });
     child.on('error', (error) => {

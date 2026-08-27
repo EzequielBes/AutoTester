@@ -13,8 +13,24 @@ contextBridge.exposeInMainWorld('api', {
   saveValidationTrack: (track) => ipcRenderer.invoke('validation-tracks:save', track),
   deleteValidationTrack: (trackId) => ipcRenderer.invoke('validation-tracks:delete', trackId),
   runValidationTrack: (params) => ipcRenderer.invoke('validation-tracks:run', params),
+  cancelValidationTrack: (executionId) => ipcRenderer.invoke('validation-tracks:cancel', executionId),
+  onValidationTrackProgress: (listener) => {
+    const wrapped = (_event, progress) => listener(progress);
+    ipcRenderer.on('validation-tracks:progress', wrapped);
+    return () => ipcRenderer.removeListener('validation-tracks:progress', wrapped);
+  },
+  listAgentProfiles: () => ipcRenderer.invoke('agent-profiles:list'),
+  saveAgentProfile: (profile) => ipcRenderer.invoke('agent-profiles:save', profile),
+  deleteAgentProfile: (profileId) => ipcRenderer.invoke('agent-profiles:delete', profileId),
+  listQualitySkills: () => ipcRenderer.invoke('quality-skills:list'),
+  saveQualitySkill: (skill) => ipcRenderer.invoke('quality-skills:save', skill),
+  deleteQualitySkill: (skillId) => ipcRenderer.invoke('quality-skills:delete', skillId),
   readHistory: () => ipcRenderer.invoke('history:read'),
-  recordAccept: (historyId) => ipcRenderer.invoke('history:record-accept', historyId),
+  openHistoryEntry: (entryId) => ipcRenderer.invoke('history:open', entryId),
+  exportHistoryEntry: (params) => ipcRenderer.invoke('history:export', params),
+  recordFindingDecision: (params) => ipcRenderer.invoke('history:record-finding-decision', params),
+  readHistorySettings: () => ipcRenderer.invoke('history-settings:read'),
+  saveHistorySettings: (settings) => ipcRenderer.invoke('history-settings:save', settings),
   pickFolder: () => ipcRenderer.invoke('dialog:pick-folder'),
   revealRepo: (repoPath) => ipcRenderer.invoke('shell:reveal-repo', repoPath),
   openInEditor: (params) => ipcRenderer.invoke('shell:open-in-editor', params)

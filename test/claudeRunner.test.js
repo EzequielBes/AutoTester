@@ -1,6 +1,17 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { parseCliOutput } = require('../src/claudeRunner');
+const { EventEmitter } = require('node:events');
+const { parseCliOutput, runClaudeReview } = require('../src/claudeRunner');
+
+function slowChild() {
+  const child = new EventEmitter();
+  child.pid = 4321;
+  child.stdout = new EventEmitter();
+  child.stderr = new EventEmitter();
+  child.stdin = new EventEmitter();
+  child.stdin.end = () => {};
+  return child;
+}
 
 test('extracts and validates findings from a CLI envelope', () => {
   const envelope = JSON.stringify({
@@ -30,4 +41,28 @@ test('throws when result is not valid JSON', () => {
 test('throws when findings fail schema validation', () => {
   const envelope = JSON.stringify({ result: JSON.stringify({ findings: [{ file: 'a.js' }] }) });
   assert.throws(() => parseCliOutput(envelope), /does not match the findings schema/);
+});
+
+test('terminates Claude and reports a timeout', async () => {
+  const child = slowChild();
+  const execution = runClaudeReview('prompt', 'content', {
+    timeoutMs: 5,
+    spawnImpl: () => child,
+    terminate: () => child.emit('close', null)
+  });
+
+  await assert.rejects(execution, (error) => error.code === 'CLAUDE_TIMEOUT');
+});
+
+test('terminates Claude when the track is cancelled', async () => {
+  const child = slowChild();
+  const controller = new AbortController();
+  const execution = runClaudeReview('prompt', 'content', {
+    signal: controller.signal,
+    spawnImpl: () => child,
+    terminate: () => child.emit('close', null)
+  });
+  controller.abort();
+
+  await assert.rejects(execution, (error) => error.code === 'TRACK_CANCELLED');
 });

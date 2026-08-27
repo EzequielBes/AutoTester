@@ -6,6 +6,16 @@ let currentRepoPath = '';
 let currentHistoryId = null;
 let validationTracks = [];
 let editingTrackId = null;
+let agentProfiles = [{ id: 'claude', name: 'Claude padrão', runtime: 'claude', instructions: '' }];
+let editingAgentProfileId = null;
+let qualitySkills = [
+  { id: 'general', name: 'Review geral', baseSkill: 'general', instructions: '', canApply: true },
+  { id: 'security', name: 'Segurança', baseSkill: 'security', instructions: '', canApply: true },
+  { id: 'performance', name: 'Performance', baseSkill: 'performance', instructions: '', canApply: true },
+  { id: 'tests', name: 'Geração de testes', baseSkill: 'tests', instructions: '', canApply: false },
+  { id: 'style', name: 'Refactor de estilo', baseSkill: 'style', instructions: '', canApply: true }
+];
+let editingQualitySkillId = null;
 let loadedFiles = [];
 let visibleFiles = [];
 let selectedFiles = new Set();
@@ -13,8 +23,13 @@ let fileRequestGeneration = 0;
 let fileFilterGeneration = 0;
 let branchGeneration = 0;
 let executionGeneration = 0;
+let activeTrackExecutionId = null;
+let livePhaseResults = new Map();
 
 function invalidateReview() {
+  if (activeTrackExecutionId) {
+    window.api.cancelValidationTrack(activeTrackExecutionId).catch(() => {});
+  }
   executionGeneration += 1;
   currentFindings = [];
   currentFileContents = {};
@@ -125,12 +140,28 @@ async function populateRecentRepos() {
 
 populateRecentRepos();
 loadValidationTracks();
+loadAgentProfiles();
+loadQualitySkills();
 
 // --- Tabs ---
 
 document.getElementById('tab-review').addEventListener('click', () => switchTab('review'));
 document.getElementById('tab-tracks').addEventListener('click', () => switchTab('tracks'));
 document.getElementById('tab-history').addEventListener('click', () => switchTab('history'));
+['history-query', 'history-kind-filter', 'history-status-filter', 'history-from-filter', 'history-to-filter'].forEach((id) => {
+  document.getElementById(id).addEventListener(id === 'history-query' ? 'input' : 'change', loadHistory);
+});
+document.getElementById('save-history-settings-btn').addEventListener('click', async () => {
+  try {
+    const maxEntries = Number(document.getElementById('history-retention').value);
+    const settings = await window.api.saveHistorySettings({ maxEntries });
+    document.getElementById('history-retention').value = settings.maxEntries;
+    setStatus(`Histórico limitado às últimas ${settings.maxEntries} execuções.`);
+    await loadHistory();
+  } catch (err) {
+    setStatus(`Erro ao salvar retenção: ${err.message}`, 'error');
+  }
+});
 
 function switchTab(name) {
   const isReview = name === 'review';
@@ -144,8 +175,15 @@ function switchTab(name) {
     element.classList.toggle('active', active);
     element.setAttribute('aria-selected', String(active));
   });
-  if (isTracks) loadValidationTracks();
-  if (isHistory) loadHistory();
+  if (isTracks) {
+    loadValidationTracks();
+    loadAgentProfiles();
+    loadQualitySkills();
+  }
+  if (isHistory) {
+    loadHistorySettings();
+    loadHistory();
+  }
 }
 
 // --- Branch loading + info panel ---
@@ -230,6 +268,10 @@ const PHASE_SKILLS = [
   ['style', 'Refactor de estilo']
 ];
 const PHASE_INTENSITIES = [['quick', 'Rápido'], ['full', 'Completo']];
+const BUILT_IN_QUALITY_SKILL_IDS = new Set([
+  'general', 'security', 'performance', 'tests', 'style',
+  'scope-review', 'tdd-gaps', 'root-cause', 'electron-ipc-security', 'merge-readiness'
+]);
 
 function appendSelectOptions(select, options, selected) {
   options.forEach(([value, label]) => {
@@ -284,7 +326,7 @@ function createPhaseEditor(phase = {}) {
   agentLabel.textContent = 'Agente';
   const agentSelect = document.createElement('select');
   agentSelect.className = 'phase-agent';
-  appendSelectOptions(agentSelect, [['claude', 'Claude CLI']], phase.agent || 'claude');
+  appendSelectOptions(agentSelect, agentProfiles.map((profile) => [profile.id, profile.name]), phase.agent || 'claude');
   agentLabel.appendChild(agentSelect);
   row.appendChild(agentLabel);
 
@@ -293,7 +335,7 @@ function createPhaseEditor(phase = {}) {
   skillLabel.textContent = 'Skill';
   const skillSelect = document.createElement('select');
   skillSelect.className = 'phase-skill';
-  appendSelectOptions(skillSelect, PHASE_SKILLS, phase.skill || 'general');
+  appendSelectOptions(skillSelect, qualitySkills.map((skill) => [skill.id, skill.name]), phase.skill || 'general');
   skillLabel.appendChild(skillSelect);
   row.appendChild(skillLabel);
 
@@ -316,6 +358,16 @@ function createPhaseEditor(phase = {}) {
   criteriaInput.value = phase.criteria || '';
   criteriaLabel.appendChild(criteriaInput);
   claudeFields.appendChild(criteriaLabel);
+
+  const parallelLabel = document.createElement('label');
+  parallelLabel.className = 'checkbox-label';
+  parallelLabel.textContent = 'Executar com subagentes paralelos';
+  const parallelInput = document.createElement('input');
+  parallelInput.type = 'checkbox';
+  parallelInput.className = 'phase-parallel';
+  parallelInput.checked = phase.parallel === true;
+  parallelLabel.appendChild(parallelInput);
+  claudeFields.appendChild(parallelLabel);
   editor.appendChild(claudeFields);
 
   const commandFields = document.createElement('div');
@@ -376,6 +428,40 @@ function createPhaseEditor(phase = {}) {
   lcovInput.value = phase.lcovPath || '';
   lcovLabel.appendChild(lcovInput);
   commandFields.appendChild(lcovLabel);
+
+  const gateRow = document.createElement('div');
+  gateRow.className = 'row';
+  const minCoverageLabel = document.createElement('label');
+  minCoverageLabel.className = 'grow';
+  minCoverageLabel.textContent = 'Cobertura mínima (%)';
+  const minCoverageInput = document.createElement('input');
+  minCoverageInput.type = 'number';
+  minCoverageInput.className = 'phase-min-coverage';
+  minCoverageInput.min = '0';
+  minCoverageInput.max = '100';
+  minCoverageInput.value = phase.coverageGate?.minLinesPct ?? '';
+  minCoverageLabel.appendChild(minCoverageInput);
+  gateRow.appendChild(minCoverageLabel);
+  const maxDropLabel = document.createElement('label');
+  maxDropLabel.className = 'grow';
+  maxDropLabel.textContent = 'Queda máxima (p.p.)';
+  const maxDropInput = document.createElement('input');
+  maxDropInput.type = 'number';
+  maxDropInput.className = 'phase-max-coverage-drop';
+  maxDropInput.min = '0';
+  maxDropInput.max = '100';
+  maxDropInput.value = phase.coverageGate?.maxDropPct ?? '';
+  maxDropLabel.appendChild(maxDropInput);
+  gateRow.appendChild(maxDropLabel);
+  const scopeLabel = document.createElement('label');
+  scopeLabel.className = 'grow';
+  scopeLabel.textContent = 'Escopo do gate';
+  const scopeSelect = document.createElement('select');
+  scopeSelect.className = 'phase-coverage-scope';
+  appendSelectOptions(scopeSelect, [['all', 'Todo LCOV'], ['selected', 'Arquivos selecionados']], phase.coverageGate?.fileScope || 'all');
+  scopeLabel.appendChild(scopeSelect);
+  gateRow.appendChild(scopeLabel);
+  commandFields.appendChild(gateRow);
   editor.appendChild(commandFields);
 
   const updateType = () => {
@@ -455,10 +541,133 @@ async function loadValidationTracks() {
   }
 }
 
+function refreshAgentProfileSelects() {
+  document.querySelectorAll('.phase-agent').forEach((select) => {
+    const selected = select.value;
+    select.innerHTML = '';
+    appendSelectOptions(select, agentProfiles.map((profile) => [profile.id, profile.name]), selected);
+    if (![...select.options].some((option) => option.value === selected) && selected) {
+      const unavailable = document.createElement('option');
+      unavailable.value = selected;
+      unavailable.textContent = 'Perfil indisponível';
+      unavailable.selected = true;
+      select.appendChild(unavailable);
+    }
+  });
+}
+
+function renderAgentProfileEditor(profile) {
+  editingAgentProfileId = profile ? profile.id : null;
+  document.getElementById('agent-profile-name').value = profile ? profile.name : '';
+  document.getElementById('agent-profile-instructions').value = profile ? profile.instructions : '';
+  document.getElementById('delete-agent-profile-btn').disabled = !profile || profile.id === 'claude';
+}
+
+function renderAgentProfileList() {
+  const list = document.getElementById('agent-profile-list');
+  list.innerHTML = '';
+  agentProfiles.forEach((profile) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'track-list-entry';
+    if (profile.id === editingAgentProfileId) button.classList.add('active');
+    const name = document.createElement('strong');
+    name.textContent = profile.name;
+    const runtime = document.createElement('span');
+    runtime.textContent = 'Claude CLI';
+    button.append(name, runtime);
+    button.addEventListener('click', () => {
+      renderAgentProfileEditor(profile);
+      renderAgentProfileList();
+    });
+    list.appendChild(button);
+  });
+}
+
+async function loadAgentProfiles() {
+  try {
+    agentProfiles = await window.api.listAgentProfiles();
+    refreshAgentProfileSelects();
+    const editedProfile = agentProfiles.find((profile) => profile.id === editingAgentProfileId);
+    renderAgentProfileEditor(editedProfile || agentProfiles[0]);
+    renderAgentProfileList();
+  } catch (err) {
+    setStatus(`Erro ao carregar perfis: ${err.message}`, 'error');
+  }
+}
+
+function refreshQualitySkillSelects() {
+  document.querySelectorAll('.phase-skill').forEach((select) => {
+    const selected = select.value;
+    select.innerHTML = '';
+    appendSelectOptions(select, qualitySkills.map((skill) => [skill.id, skill.name]), selected);
+    if (![...select.options].some((option) => option.value === selected) && selected) {
+      const unavailable = document.createElement('option');
+      unavailable.value = selected;
+      unavailable.textContent = 'Skill indisponível';
+      unavailable.selected = true;
+      select.appendChild(unavailable);
+    }
+  });
+}
+
+function renderQualitySkillEditor(skill) {
+  editingQualitySkillId = skill ? skill.id : null;
+  const isBuiltIn = skill && BUILT_IN_QUALITY_SKILL_IDS.has(skill.id);
+  document.getElementById('quality-skill-name').value = skill ? skill.name : '';
+  document.getElementById('quality-skill-base').value = skill ? skill.baseSkill : 'general';
+  document.getElementById('quality-skill-instructions').value = skill ? skill.instructions : '';
+  document.getElementById('quality-skill-name').disabled = Boolean(isBuiltIn);
+  document.getElementById('quality-skill-base').disabled = Boolean(isBuiltIn);
+  document.getElementById('quality-skill-instructions').disabled = Boolean(isBuiltIn);
+  document.getElementById('save-quality-skill-btn').disabled = Boolean(isBuiltIn);
+  document.getElementById('delete-quality-skill-btn').disabled = !skill || Boolean(isBuiltIn);
+}
+
+function renderQualitySkillList() {
+  const list = document.getElementById('quality-skill-list');
+  list.innerHTML = '';
+  qualitySkills.forEach((skill) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'track-list-entry';
+    if (skill.id === editingQualitySkillId) button.classList.add('active');
+    const name = document.createElement('strong');
+    name.textContent = skill.name;
+    const base = document.createElement('span');
+    base.textContent = skill.baseSkill;
+    button.append(name, base);
+    button.addEventListener('click', () => {
+      renderQualitySkillEditor(skill);
+      renderQualitySkillList();
+    });
+    list.appendChild(button);
+  });
+}
+
+async function loadQualitySkills() {
+  try {
+    qualitySkills = await window.api.listQualitySkills();
+    refreshQualitySkillSelects();
+    const editedSkill = qualitySkills.find((skill) => skill.id === editingQualitySkillId);
+    renderQualitySkillEditor(editedSkill || qualitySkills[0]);
+    renderQualitySkillList();
+  } catch (err) {
+    setStatus(`Erro ao carregar skills: ${err.message}`, 'error');
+  }
+}
+
 function getTrackDraft() {
   const phases = Array.from(document.querySelectorAll('.phase-editor')).map((editor) => {
     const type = editor.querySelector('.phase-type').value;
     if (type === 'command') {
+      const minLinesPct = editor.querySelector('.phase-min-coverage').value;
+      const maxDropPct = editor.querySelector('.phase-max-coverage-drop').value;
+      const coverageGate = minLinesPct || maxDropPct ? {
+        minLinesPct: minLinesPct === '' ? null : Number(minLinesPct),
+        maxDropPct: maxDropPct === '' ? null : Number(maxDropPct),
+        fileScope: editor.querySelector('.phase-coverage-scope').value
+      } : null;
       return {
         id: editor.dataset.phaseId,
         type,
@@ -466,7 +675,8 @@ function getTrackDraft() {
         command: editor.querySelector('.phase-command').value.trim(),
         timeoutMs: Number(editor.querySelector('.phase-timeout').value) * 1000,
         expectedExitCode: Number(editor.querySelector('.phase-exit-code').value),
-        lcovPath: editor.querySelector('.phase-lcov-path').value.trim()
+        lcovPath: editor.querySelector('.phase-lcov-path').value.trim(),
+        coverageGate
       };
     }
     return {
@@ -476,7 +686,8 @@ function getTrackDraft() {
       agent: editor.querySelector('.phase-agent').value,
       skill: editor.querySelector('.phase-skill').value,
       intensity: editor.querySelector('.phase-intensity').value,
-      criteria: editor.querySelector('.phase-criteria').value.trim()
+      criteria: editor.querySelector('.phase-criteria').value.trim(),
+      parallel: editor.querySelector('.phase-parallel').checked
     };
   });
   return { id: editingTrackId, name: document.getElementById('track-name').value.trim(), phases };
@@ -485,6 +696,87 @@ function getTrackDraft() {
 document.getElementById('new-track-btn').addEventListener('click', () => {
   renderTrackEditor(null);
   renderTrackList();
+});
+
+document.getElementById('new-agent-profile-btn').addEventListener('click', () => {
+  renderAgentProfileEditor(null);
+  renderAgentProfileList();
+});
+
+document.getElementById('new-quality-skill-btn').addEventListener('click', () => {
+  renderQualitySkillEditor(null);
+  renderQualitySkillList();
+});
+
+document.getElementById('save-quality-skill-btn').addEventListener('click', async () => {
+  try {
+    const draft = {
+      id: editingQualitySkillId,
+      name: document.getElementById('quality-skill-name').value.trim(),
+      baseSkill: document.getElementById('quality-skill-base').value,
+      instructions: document.getElementById('quality-skill-instructions').value.trim()
+    };
+    const skills = await window.api.saveQualitySkill(draft);
+    qualitySkills = skills;
+    editingQualitySkillId = draft.id || skills.at(-1).id;
+    refreshQualitySkillSelects();
+    const savedSkill = skills.find((skill) => skill.id === editingQualitySkillId);
+    renderQualitySkillEditor(savedSkill);
+    renderQualitySkillList();
+    setStatus(`Skill "${savedSkill.name}" salva.`);
+  } catch (err) {
+    setStatus(`Erro ao salvar skill: ${err.message}`, 'error');
+  }
+});
+
+document.getElementById('delete-quality-skill-btn').addEventListener('click', async () => {
+  const skill = qualitySkills.find((item) => item.id === editingQualitySkillId);
+  if (!skill || BUILT_IN_QUALITY_SKILL_IDS.has(skill.id) || !window.confirm(`Excluir a skill "${skill.name}"?`)) return;
+  try {
+    qualitySkills = await window.api.deleteQualitySkill(skill.id);
+    editingQualitySkillId = null;
+    refreshQualitySkillSelects();
+    renderQualitySkillEditor(qualitySkills[0]);
+    renderQualitySkillList();
+    setStatus(`Skill "${skill.name}" excluída.`);
+  } catch (err) {
+    setStatus(`Erro ao excluir skill: ${err.message}`, 'error');
+  }
+});
+
+document.getElementById('save-agent-profile-btn').addEventListener('click', async () => {
+  try {
+    const draft = {
+      id: editingAgentProfileId,
+      name: document.getElementById('agent-profile-name').value.trim(),
+      instructions: document.getElementById('agent-profile-instructions').value.trim()
+    };
+    const profiles = await window.api.saveAgentProfile(draft);
+    agentProfiles = profiles;
+    editingAgentProfileId = draft.id || profiles.at(-1).id;
+    refreshAgentProfileSelects();
+    const savedProfile = profiles.find((profile) => profile.id === editingAgentProfileId);
+    renderAgentProfileEditor(savedProfile);
+    renderAgentProfileList();
+    setStatus(`Perfil "${savedProfile.name}" salvo.`);
+  } catch (err) {
+    setStatus(`Erro ao salvar perfil: ${err.message}`, 'error');
+  }
+});
+
+document.getElementById('delete-agent-profile-btn').addEventListener('click', async () => {
+  const profile = agentProfiles.find((item) => item.id === editingAgentProfileId);
+  if (!profile || profile.id === 'claude' || !window.confirm(`Excluir o perfil "${profile.name}"?`)) return;
+  try {
+    agentProfiles = await window.api.deleteAgentProfile(profile.id);
+    editingAgentProfileId = null;
+    refreshAgentProfileSelects();
+    renderAgentProfileEditor(agentProfiles[0]);
+    renderAgentProfileList();
+    setStatus(`Perfil "${profile.name}" excluído.`);
+  } catch (err) {
+    setStatus(`Erro ao excluir perfil: ${err.message}`, 'error');
+  }
 });
 
 document.getElementById('add-phase-btn').addEventListener('click', () => {
@@ -519,7 +811,21 @@ document.getElementById('delete-track-btn').addEventListener('click', async () =
 function setExecutionRunning(isRunning) {
   document.getElementById('run-btn').disabled = isRunning;
   document.getElementById('run-track-btn').disabled = isRunning;
+  document.getElementById('cancel-track-btn').disabled = !isRunning || !activeTrackExecutionId;
 }
+
+window.api.onValidationTrackProgress((progress) => {
+  if (progress.executionId !== activeTrackExecutionId) return;
+  if (progress.kind === 'phase') {
+    const previous = livePhaseResults.get(progress.phaseId) || {};
+    livePhaseResults.set(progress.phaseId, { ...previous, ...progress, ...(progress.result || {}) });
+    renderPhaseResults([...livePhaseResults.values()]);
+    setStatus(`Trilha: ${progress.phaseName} ${progress.status}.`, progress.status === 'running' ? 'running' : '');
+  } else if (progress.kind === 'track') {
+    renderPhaseResults(progress.phases);
+    setStatus(progress.status === 'cancelled' ? 'Trilha cancelada.' : `Trilha ${progress.status}.`);
+  }
+});
 
 // --- Files ---
 
@@ -689,10 +995,15 @@ document.getElementById('run-btn').addEventListener('click', async () => {
   try {
     const response = await window.api.runReview({ repoPath, branch, files, skill, intensity });
     if (runGeneration !== executionGeneration) return;
-    currentFindings = response.findings.map((finding, index) => ({ ...finding, id: index, status: 'pending' }));
+    currentFindings = response.findings.map((finding, index) => ({ ...finding, id: index, findingIndex: index, status: 'pending' }));
     currentFileContents = response.fileContents;
     currentHistoryId = response.historyId;
-    currentFindings = currentFindings.map((finding) => ({ ...finding, canApply: response.canApply, runId: response.historyId }));
+    currentFindings = currentFindings.map((finding) => ({
+      ...finding,
+      canApply: response.canApply,
+      applyRunId: response.applyRunId,
+      historyId: response.historyId
+    }));
     renderFindings();
     const n = currentFindings.length;
     setStatus(`${n} finding${n === 1 ? '' : 's'} encontrado${n === 1 ? '' : 's'}.`);
@@ -733,18 +1044,22 @@ document.getElementById('run-track-btn').addEventListener('click', async () => {
   currentRepoPath = repoPath;
   invalidateReview();
   const runGeneration = executionGeneration;
+  activeTrackExecutionId = crypto.randomUUID();
+  livePhaseResults = new Map();
   setStatus(`Executando trilha "${track.name}" em ${track.phases.length} fase${track.phases.length === 1 ? '' : 's'}...`, 'running');
   setCoreState('running', { value: '···', label: 'Executando trilha' });
   setExecutionRunning(true);
   try {
-    const response = await window.api.runValidationTrack({ trackId, repoPath, branch, files });
+    const response = await window.api.runValidationTrack({ executionId: activeTrackExecutionId, trackId, repoPath, branch, files });
     if (runGeneration !== executionGeneration) return;
     let findingId = 0;
-    currentFindings = response.phases.flatMap((phase) => (phase.findings || []).map((finding) => ({
+    currentFindings = response.phases.flatMap((phase) => (phase.findings || []).map((finding, findingIndex) => ({
       ...finding,
       id: findingId++,
+      findingIndex,
       status: 'pending',
-      runId: phase.runId,
+      applyRunId: phase.applyRunId,
+      historyId: phase.historyId,
       canApply: phase.canApply,
       phaseName: phase.phaseName
     })));
@@ -752,7 +1067,9 @@ document.getElementById('run-track-btn').addEventListener('click', async () => {
     const n = currentFindings.length;
     renderPhaseResults(response.phases);
     renderFindings();
-    setStatus(`Trilha "${track.name}" concluída: ${response.phases.length} fases, ${n} finding${n === 1 ? '' : 's'}.`);
+    setStatus(response.status === 'cancelled'
+      ? `Trilha "${track.name}" cancelada após ${response.phases.length} fases.`
+      : `Trilha "${track.name}" concluída: ${response.phases.length} fases, ${n} finding${n === 1 ? '' : 's'}.`);
     setCoreState(worstSeverityClass(currentFindings), { value: n, label: n === 1 ? 'Finding' : 'Findings' });
     populateRecentRepos();
   } catch (err) {
@@ -760,7 +1077,19 @@ document.getElementById('run-track-btn').addEventListener('click', async () => {
     setStatus(`Erro na trilha: ${err.message}`, 'error');
     setCoreState('error', { value: '!!', label: 'Erro' });
   } finally {
+    activeTrackExecutionId = null;
     setExecutionRunning(false);
+  }
+});
+
+document.getElementById('cancel-track-btn').addEventListener('click', async () => {
+  if (!activeTrackExecutionId) return;
+  document.getElementById('cancel-track-btn').disabled = true;
+  setStatus('Cancelamento solicitado...', 'running');
+  try {
+    await window.api.cancelValidationTrack(activeTrackExecutionId);
+  } catch (err) {
+    setStatus(`Erro ao cancelar trilha: ${err.message}`, 'error');
   }
 });
 
@@ -778,12 +1107,22 @@ function renderPhaseResults(phases) {
     status.className = 'status-label';
     status.textContent = phase.status;
     header.append(title, status);
+    if (phase.parallel) {
+      const parallel = document.createElement('span');
+      parallel.className = 'status-label';
+      parallel.textContent = 'paralelo';
+      header.appendChild(parallel);
+    }
     card.appendChild(header);
 
     const detail = document.createElement('div');
     detail.className = 'helper-text';
     if (phase.type === 'claude') {
-      detail.textContent = phase.status === 'passed'
+      detail.textContent = phase.status === 'running' || phase.status === 'queued'
+        ? 'Aguardando ou executando a análise.'
+        : phase.status === 'cancelled'
+          ? 'Análise cancelada.'
+          : phase.status === 'passed'
         ? `${phase.findings.length} finding${phase.findings.length === 1 ? '' : 's'} na análise.`
         : phase.error || 'A análise falhou.';
     } else {
@@ -791,7 +1130,10 @@ function renderPhaseResults(phases) {
       const duration = typeof result.durationMs === 'number' ? `${(result.durationMs / 1000).toFixed(1)}s` : '';
       const exitCode = result.exitCode === null || result.exitCode === undefined ? '' : `saída ${result.exitCode}`;
       const coverage = phase.coverage ? `cobertura de linhas ${phase.coverage.lines.pct}%` : '';
-      detail.textContent = [phase.error || phase.status, exitCode, duration, coverage].filter(Boolean).join(' · ');
+      const gate = phase.coverageGate
+        ? `gate ${phase.coverageGate.passed ? 'aprovado' : 'reprovado'}${phase.coverageGate.baseline ? ` vs ${phase.coverageGate.baseline.pct}%` : ' sem baseline anterior'}`
+        : '';
+      detail.textContent = [phase.error || phase.status, exitCode, duration, coverage, gate].filter(Boolean).join(' · ');
     }
     card.appendChild(detail);
 
@@ -925,42 +1267,90 @@ async function acceptFinding(id) {
   renderFindings();
 
   try {
-    const runId = finding.runId || currentHistoryId;
-    await window.api.applyFinding({ repoPath: currentRepoPath, historyId: runId, finding });
-    finding.status = 'aplicado';
-    if (runId) {
-      window.api.recordAccept(runId).catch(() => {});
-    }
-
-    // ponytail: applying one finding shifts line numbers for any other
-    // pending finding in the same file, invalidating its "lines" range.
-    // Rather than remapping offsets, mark siblings stale and require a
-    // fresh run — upgrade to offset remapping only if re-running becomes
-    // a real friction point.
-    currentFindings
-      .filter((f) => f.file === finding.file && f.id !== finding.id && f.status === 'pending')
-      .forEach((f) => { f.status = 'obsoleto (rode a análise de novo)'; });
-
-    setStatus(`Finding aplicado em ${finding.file}.`);
+    const applyRunId = finding.applyRunId;
+    await window.api.applyFinding({ repoPath: currentRepoPath, applyRunId, finding });
   } catch (err) {
     finding.status = 'pending';
     setStatus(`Erro ao aplicar: ${err.message}`, 'error');
+    renderFindings();
+    return;
   }
+
+  finding.status = 'aplicado';
+  const historyId = finding.historyId || currentHistoryId;
+  if (historyId) {
+    try {
+      await window.api.recordFindingDecision({ historyId, findingIndex: finding.findingIndex, outcome: 'applied' });
+    } catch (err) {
+      finding.status = 'aplicado (não auditado)';
+      setStatus(`Alteração aplicada, mas o registro auditável falhou: ${err.message}`, 'error');
+    }
+  }
+
+  // ponytail: applying one finding shifts line numbers for any other
+  // pending finding in the same file, invalidating its "lines" range.
+  // Rather than remapping offsets, mark siblings stale and require a
+  // fresh run — upgrade to offset remapping only if re-running becomes
+  // a real friction point.
+  currentFindings
+    .filter((f) => f.file === finding.file && f.id !== finding.id && f.status === 'pending')
+    .forEach((f) => { f.status = 'obsoleto (rode a análise de novo)'; });
+
+  if (finding.status === 'aplicado') setStatus(`Finding aplicado em ${finding.file}.`);
   renderFindings();
 }
 
-function rejectFinding(id) {
+async function rejectFinding(id) {
   const finding = currentFindings.find((f) => f.id === id);
   if (!finding || finding.status !== 'pending') return;
+  finding.status = 'rejeitando';
+  renderFindings();
+  const historyId = finding.historyId || currentHistoryId;
+  if (historyId) {
+    try {
+      await window.api.recordFindingDecision({ historyId, findingIndex: finding.findingIndex, outcome: 'rejected' });
+    } catch (err) {
+      finding.status = 'pending';
+      setStatus(`Erro ao registrar rejeição: ${err.message}`, 'error');
+      renderFindings();
+      return;
+    }
+  }
   finding.status = 'rejeitado';
   renderFindings();
 }
 
 // --- History tab ---
 
+async function loadHistorySettings() {
+  try {
+    const settings = await window.api.readHistorySettings();
+    document.getElementById('history-retention').value = settings.maxEntries;
+  } catch (err) {
+    setStatus(`Erro ao carregar retenção: ${err.message}`, 'error');
+  }
+}
+
+function matchesHistoryFilters(entry) {
+  const query = document.getElementById('history-query').value.trim().toLocaleLowerCase();
+  const kind = document.getElementById('history-kind-filter').value;
+  const status = document.getElementById('history-status-filter').value;
+  const from = document.getElementById('history-from-filter').value;
+  const to = document.getElementById('history-to-filter').value;
+  const searchText = [entry.branch, entry.trackName, entry.phaseName, entry.skillName, entry.skill, entry.agentProfileName]
+    .filter(Boolean).join(' ').toLocaleLowerCase();
+  const day = String(entry.timestamp || '').slice(0, 10);
+  return (!query || searchText.includes(query))
+    && (!kind || entry.kind === kind)
+    && (!status || entry.status === status)
+    && (!from || day >= from)
+    && (!to || day <= to);
+}
+
 async function loadHistory() {
   const summaryEl = document.getElementById('history-summary');
   const listEl = document.getElementById('history-list');
+  document.getElementById('history-details').classList.add('hidden');
   summaryEl.textContent = '';
   listEl.innerHTML = '';
 
@@ -976,25 +1366,26 @@ async function loadHistory() {
     return;
   }
 
-  const reviewHistory = history.filter((entry) => entry.kind !== 'validation-command');
+  const filteredHistory = history.filter(matchesHistoryFilters);
+  const reviewHistory = filteredHistory.filter((entry) => entry.kind !== 'validation-command');
   const totalRuns = reviewHistory.length;
   const totalFindings = reviewHistory.reduce((sum, e) => sum + (e.findingsCount || 0), 0);
   const totalAccepted = reviewHistory.reduce((sum, e) => sum + (e.acceptedCount || 0), 0);
   const overallRate = totalFindings > 0 ? Math.round((totalAccepted / totalFindings) * 100) : null;
 
-  summaryEl.appendChild(stat(totalRuns, 'Reviews rodados'));
+  summaryEl.appendChild(stat(filteredHistory.length, 'Execuções encontradas'));
   summaryEl.appendChild(stat(totalFindings, 'Findings totais'));
   summaryEl.appendChild(stat(overallRate === null ? '—' : `${overallRate}%`, 'Taxa de aceite'));
 
-  if (totalRuns === 0) {
+  if (filteredHistory.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'empty-state';
-    empty.textContent = 'Nenhuma review rodada ainda.';
+    empty.textContent = history.length === 0 ? 'Nenhuma execução registrada ainda.' : 'Nenhuma execução corresponde aos filtros.';
     listEl.appendChild(empty);
     return;
   }
 
-  [...history].reverse().forEach((entry) => {
+  [...filteredHistory].reverse().forEach((entry) => {
     const row = document.createElement('div');
     row.className = 'history-entry';
 
@@ -1009,7 +1400,7 @@ async function loadHistory() {
       ? `${entry.trackName} / ${entry.phaseName}`
       : `${entry.skill} / ${entry.intensity}`;
     meta.appendChild(strong);
-    meta.appendChild(document.createTextNode(` — ${[entry.branch, fileCount, entry.agent].filter(Boolean).join(' / ')} — ${when}`));
+    meta.appendChild(document.createTextNode(` — ${[entry.branch, fileCount, entry.agentProfileName || entry.agent].filter(Boolean).join(' / ')} — ${when}`));
     row.appendChild(meta);
 
     const rate = document.createElement('div');
@@ -1026,8 +1417,102 @@ async function loadHistory() {
     }
     row.appendChild(rate);
 
+    const openButton = document.createElement('button');
+    openButton.type = 'button';
+    openButton.textContent = 'Abrir detalhes';
+    openButton.addEventListener('click', () => openHistoryEntry(entry.id));
+    row.appendChild(openButton);
+
     listEl.appendChild(row);
   });
+}
+
+async function openHistoryEntry(entryId) {
+  try {
+    const entry = await window.api.openHistoryEntry(entryId);
+    if (!entry) {
+      setStatus('Execução histórica não encontrada.', 'error');
+      return;
+    }
+    renderHistoryDetails(entry);
+  } catch (err) {
+    setStatus(`Erro ao abrir histórico: ${err.message}`, 'error');
+  }
+}
+
+function renderHistoryDetails(entry) {
+  const details = document.getElementById('history-details');
+  details.innerHTML = '';
+  details.classList.remove('hidden');
+  const title = document.createElement('h2');
+  title.className = 'panel-title';
+  title.textContent = `Evidências: ${entry.phaseName || entry.skill || 'execução'}`;
+  details.appendChild(title);
+
+  const meta = document.createElement('p');
+  meta.className = 'helper-text';
+  meta.textContent = [entry.status, entry.branch, entry.headCommit || entry.commitHash, entry.agentProfileName, entry.skillName || entry.skill]
+    .filter(Boolean).join(' · ');
+  details.appendChild(meta);
+  const exportActions = document.createElement('div');
+  exportActions.className = 'actions';
+  [['json', 'Exportar JSON'], ['markdown', 'Exportar Markdown']].forEach(([format, label]) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = label;
+    button.addEventListener('click', async () => {
+      try {
+        const filePath = await window.api.exportHistoryEntry({ entryId: entry.id, format });
+        if (filePath) setStatus(`Relatório exportado em ${filePath}.`);
+      } catch (err) {
+        setStatus(`Erro ao exportar relatório: ${err.message}`, 'error');
+      }
+    });
+    exportActions.appendChild(button);
+  });
+  details.appendChild(exportActions);
+
+  if (entry.criteria) {
+    const criteria = document.createElement('pre');
+    criteria.className = 'history-evidence';
+    criteria.textContent = entry.criteria;
+    details.appendChild(criteria);
+  }
+  (entry.findings || []).forEach((finding) => {
+    const findingEl = document.createElement('article');
+    findingEl.className = `finding severity-${finding.severity}`;
+    const location = document.createElement('strong');
+    location.textContent = `${finding.file}:${finding.lines} · ${finding.severity} · ${finding.category}`;
+    const message = document.createElement('p');
+    message.textContent = finding.message;
+    findingEl.append(location, message);
+    if (finding.suggestion) {
+      const suggestion = document.createElement('pre');
+      suggestion.className = 'diff-added';
+      suggestion.textContent = finding.suggestion;
+      findingEl.appendChild(suggestion);
+    }
+    details.appendChild(findingEl);
+  });
+
+  if (entry.coverage) {
+    const coverage = document.createElement('p');
+    coverage.className = 'helper-text';
+    coverage.textContent = `Cobertura de linhas: ${entry.coverage.lines.hit}/${entry.coverage.lines.found} (${entry.coverage.lines.pct}%)`;
+    details.appendChild(coverage);
+  }
+  if (entry.coverageGate) {
+    const gate = document.createElement('p');
+    gate.className = 'helper-text';
+    gate.textContent = `Gate de cobertura: ${entry.coverageGate.passed ? 'aprovado' : 'reprovado'} · ${entry.coverageGate.lines.pct}%${entry.coverageGate.baseline ? ` · baseline ${entry.coverageGate.baseline.pct}%` : ' · primeiro baseline'}`;
+    details.appendChild(gate);
+  }
+  if (entry.logs?.stdout || entry.logs?.stderr) {
+    const logs = document.createElement('pre');
+    logs.className = 'phase-log';
+    logs.textContent = [entry.logs.stdout, entry.logs.stderr].filter(Boolean).join('\n');
+    details.appendChild(logs);
+  }
 }
 
 function stat(value, label) {

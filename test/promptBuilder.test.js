@@ -52,6 +52,18 @@ test('appends optional phase criteria after the prompt blocks', () => {
   assert.ok(prompt.endsWith('Require authorization checks.'));
 });
 
+test('places profile instructions before phase criteria', () => {
+  const filePath = writeFixture();
+  const prompt = buildSystemPrompt(filePath, 'security', 'full', 'Phase criteria.', 'Profile instructions.');
+  assert.ok(prompt.indexOf('Profile instructions.') < prompt.indexOf('Phase criteria.'));
+});
+
+test('places quality skill instructions before phase criteria', () => {
+  const filePath = writeFixture();
+  const prompt = buildSystemPrompt(filePath, 'security', 'full', 'Phase criteria.', '', 'Quality skill instructions.');
+  assert.ok(prompt.indexOf('Quality skill instructions.') < prompt.indexOf('Phase criteria.'));
+});
+
 test('throws on unknown skill', () => {
   const filePath = writeFixture();
   assert.throws(() => buildSystemPrompt(filePath, 'nope', 'full'), /unknown skill/);

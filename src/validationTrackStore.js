@@ -2,16 +2,15 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { SKILL_HEADINGS, INTENSITY_HEADINGS } = require('./promptBuilder');
+const { INTENSITY_HEADINGS } = require('./promptBuilder');
 
-const STORE_VERSION = 2;
+const STORE_VERSION = 3;
 const MAX_NAME_LENGTH = 100;
 const MAX_CRITERIA_LENGTH = 2000;
 const MAX_COMMAND_LENGTH = 2000;
 const MAX_LCOV_PATH_LENGTH = 500;
 const MIN_TIMEOUT_MS = 1000;
 const MAX_TIMEOUT_MS = 3600000;
-const SUPPORTED_AGENTS = new Set(['claude']);
 
 function validateText(value, label, { required = false, maxLength = MAX_NAME_LENGTH } = {}) {
   if (typeof value !== 'string') throw new Error(`${label} must be a string`);
@@ -29,10 +28,13 @@ function validateRelativePath(value, label) {
 }
 
 function validateClaudePhase(phase) {
-  if (!SUPPORTED_AGENTS.has(phase.agent)) throw new Error('phase.agent is not supported');
-  if (!SKILL_HEADINGS[phase.skill]) throw new Error('phase.skill is not supported');
+  if (typeof phase.agent !== 'string' || phase.agent.length === 0) throw new Error('phase.agent must be a non-empty string');
+  if (typeof phase.skill !== 'string' || phase.skill.length === 0) throw new Error('phase.skill must be a non-empty string');
   if (!INTENSITY_HEADINGS[phase.intensity]) throw new Error('phase.intensity is not supported');
   validateText(phase.criteria, 'phase.criteria', { maxLength: MAX_CRITERIA_LENGTH });
+  if (phase.parallel !== undefined && typeof phase.parallel !== 'boolean') {
+    throw new Error('phase.parallel must be a boolean');
+  }
 }
 
 function validateCommandPhase(phase) {
@@ -43,6 +45,17 @@ function validateCommandPhase(phase) {
   validateRelativePath(phase.lcovPath, 'phase.lcovPath');
   if (!Number.isInteger(phase.expectedExitCode) || phase.expectedExitCode < 0 || phase.expectedExitCode > 255) {
     throw new Error('phase.expectedExitCode must be between 0 and 255');
+  }
+  if (phase.coverageGate !== undefined && phase.coverageGate !== null) {
+    const gate = phase.coverageGate;
+    if (!phase.lcovPath) throw new Error('phase.coverageGate requires phase.lcovPath');
+    if (!gate || typeof gate !== 'object' || Array.isArray(gate)) throw new Error('phase.coverageGate must be an object');
+    for (const key of ['minLinesPct', 'maxDropPct']) {
+      if (gate[key] !== null && gate[key] !== undefined && (!Number.isFinite(gate[key]) || gate[key] < 0 || gate[key] > 100)) {
+        throw new Error(`phase.coverageGate.${key} must be between 0 and 100`);
+      }
+    }
+    if (!['all', 'selected'].includes(gate.fileScope)) throw new Error('phase.coverageGate.fileScope is not supported');
   }
 }
 
@@ -85,6 +98,13 @@ function migrateV1Track(track) {
   };
 }
 
+function migrateV2Track(track) {
+  return {
+    ...track,
+    phases: track.phases.map((phase) => phase.type === 'command' ? { ...phase, coverageGate: phase.coverageGate || null } : phase)
+  };
+}
+
 function readValidationTracks(filePath) {
   if (!fs.existsSync(filePath)) return [];
   let data;
@@ -98,6 +118,7 @@ function readValidationTracks(filePath) {
   }
   const tracks = data.version === 1
     ? data.tracks.map(migrateV1Track)
+    : data.version === 2 ? data.tracks.map(migrateV2Track)
     : data.version === STORE_VERSION ? data.tracks : null;
   if (!tracks) throw new Error('validation track storage has an unsupported schema');
   tracks.forEach(validateTrack);
@@ -120,7 +141,6 @@ module.exports = {
   MAX_LCOV_PATH_LENGTH,
   MIN_TIMEOUT_MS,
   MAX_TIMEOUT_MS,
-  SUPPORTED_AGENTS,
   validateTrack,
   readValidationTracks,
   writeValidationTracks
