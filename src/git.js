@@ -26,9 +26,25 @@ function detectDefaultBranch(repoPath) {
   throw new Error('could not find a "main" or "master" branch');
 }
 
-function listAllFiles(repoPath) {
-  const out = git(repoPath, ['ls-files']);
+function listAllFiles(repoPath, branch) {
+  const out = branch
+    ? git(repoPath, ['ls-tree', '-r', '--name-only', branch])
+    : git(repoPath, ['ls-files']);
   return out.split('\n').map((line) => line.trim()).filter(Boolean);
+}
+
+function readFileAtRef(repoPath, branch, relativePath) {
+  return git(repoPath, ['show', `${branch}:${relativePath}`]);
+}
+
+function getCurrentBranch(repoPath) {
+  const branch = git(repoPath, ['symbolic-ref', '--quiet', '--short', 'HEAD']).trim();
+  if (!branch) throw new Error('repository is in detached HEAD state');
+  return branch;
+}
+
+function getCommitHash(repoPath, ref) {
+  return git(repoPath, ['rev-parse', '--verify', `${ref}^{commit}`]).trim();
 }
 
 function listChangedFiles(repoPath, branch) {
@@ -36,7 +52,7 @@ function listChangedFiles(repoPath, branch) {
   if (branch === baseBranch) {
     return [];
   }
-  const out = git(repoPath, ['diff', '--name-only', `${baseBranch}...${branch}`]);
+  const out = git(repoPath, ['diff', '--name-only', '--diff-filter=ACMR', `${baseBranch}...${branch}`]);
   return out.split('\n').map((line) => line.trim()).filter(Boolean);
 }
 
@@ -74,4 +90,13 @@ function getBranchInfo(repoPath, branch) {
   };
 }
 
-module.exports = { listBranches, listAllFiles, listChangedFiles, detectDefaultBranch, getBranchInfo };
+module.exports = {
+  listBranches,
+  listAllFiles,
+  listChangedFiles,
+  readFileAtRef,
+  getCurrentBranch,
+  getCommitHash,
+  detectDefaultBranch,
+  getBranchInfo
+};

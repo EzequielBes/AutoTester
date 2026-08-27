@@ -4,7 +4,15 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
-const { listBranches, listAllFiles, listChangedFiles, getBranchInfo } = require('../src/git');
+const {
+  listBranches,
+  listAllFiles,
+  listChangedFiles,
+  readFileAtRef,
+  getCurrentBranch,
+  getCommitHash,
+  getBranchInfo
+} = require('../src/git');
 
 function run(cwd, args) {
   execFileSync('git', args, { cwd });
@@ -38,6 +46,24 @@ test('lists all tracked files', () => {
   assert.deepEqual(files.sort(), ['a.txt', 'b.txt']);
 });
 
+test('lists files from the selected branch rather than the working tree', () => {
+  const dir = makeFixtureRepo();
+  assert.deepEqual(listAllFiles(dir, 'main'), ['a.txt']);
+  assert.deepEqual(listAllFiles(dir, 'feature').sort(), ['a.txt', 'b.txt']);
+});
+
+test('reads file content from the selected branch', () => {
+  const dir = makeFixtureRepo();
+  fs.writeFileSync(path.join(dir, 'a.txt'), 'feature content\n');
+  run(dir, ['add', 'a.txt']);
+  run(dir, ['commit', '-m', 'change a on feature']);
+
+  assert.equal(readFileAtRef(dir, 'main', 'a.txt'), 'hello\n');
+  assert.equal(readFileAtRef(dir, 'feature', 'a.txt'), 'feature content\n');
+  assert.equal(getCurrentBranch(dir), 'feature');
+  assert.equal(getCommitHash(dir, 'HEAD'), getCommitHash(dir, 'feature'));
+});
+
 test('lists only files changed on the feature branch vs main', () => {
   const dir = makeFixtureRepo();
   const changed = listChangedFiles(dir, 'feature');
@@ -48,6 +74,15 @@ test('returns no changed files for the default branch itself', () => {
   const dir = makeFixtureRepo();
   const changed = listChangedFiles(dir, 'main');
   assert.deepEqual(changed, []);
+});
+
+test('does not list files deleted from the selected branch', () => {
+  const dir = makeFixtureRepo();
+  fs.unlinkSync(path.join(dir, 'a.txt'));
+  run(dir, ['add', '-u']);
+  run(dir, ['commit', '-m', 'remove a']);
+
+  assert.deepEqual(listChangedFiles(dir, 'feature'), ['b.txt']);
 });
 
 test('lists a non-ASCII filename verbatim instead of octal-quoted', () => {

@@ -3,7 +3,7 @@
 const SEVERITIES = new Set(['high', 'medium', 'low']);
 const CATEGORIES = new Set(['security', 'performance', 'style', 'bug', 'test-coverage']);
 
-function validateFindings(parsed) {
+function validateFindings(parsed, { allowedFiles } = {}) {
   if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
     return { valid: false, errors: ['root value must be an object'] };
   }
@@ -12,6 +12,7 @@ function validateFindings(parsed) {
   }
 
   const errors = [];
+  const allowedFileSet = allowedFiles ? new Set(allowedFiles) : null;
   parsed.findings.forEach((finding, index) => {
     const prefix = `findings[${index}]`;
     if (typeof finding !== 'object' || finding === null) {
@@ -20,6 +21,8 @@ function validateFindings(parsed) {
     }
     if (typeof finding.file !== 'string' || finding.file.length === 0) {
       errors.push(`${prefix}.file must be a non-empty string`);
+    } else if (allowedFileSet && !allowedFileSet.has(finding.file)) {
+      errors.push(`${prefix}.file must be one of the selected files`);
     }
     if (typeof finding.lines !== 'string' || !/^\d+(-\d+)?$/.test(finding.lines)) {
       errors.push(`${prefix}.lines must match "N" or "N-M"`);

@@ -17,6 +17,16 @@ test('accepts an empty findings array', () => {
   assert.equal(result.valid, true);
 });
 
+test('rejects a finding outside the selected file scope', () => {
+  const result = validateFindings({
+    findings: [
+      { file: 'src/other.js', lines: '10', severity: 'low', category: 'bug', message: 'x', suggestion: '' }
+    ]
+  }, { allowedFiles: ['src/a.js'] });
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((error) => error.includes('selected files')));
+});
+
 test('rejects an unknown severity value', () => {
   const result = validateFindings({
     findings: [

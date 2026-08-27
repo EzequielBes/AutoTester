@@ -26,7 +26,7 @@ const INTENSITY_HEADINGS = {
   full: 'Intensity: full'
 };
 
-function buildSystemPrompt(promptFilePath, skill, intensity) {
+function buildSystemPrompt(promptFilePath, skill, intensity, criteria = '') {
   const skillHeading = SKILL_HEADINGS[skill];
   const intensityHeading = INTENSITY_HEADINGS[intensity];
   if (!skillHeading) throw new Error(`unknown skill: ${skill}`);
@@ -42,7 +42,10 @@ function buildSystemPrompt(promptFilePath, skill, intensity) {
   if (!skillBlock) throw new Error(`prompt file is missing a "## ${skillHeading}" section`);
   if (!intensityBlock) throw new Error(`prompt file is missing a "## ${intensityHeading}" section`);
 
-  return [base, skillBlock, intensityBlock].join('\n\n');
+  const criteriaBlock = criteria.trim()
+    ? `Critérios adicionais definidos para esta fase:\n${criteria.trim()}`
+    : '';
+  return [base, skillBlock, intensityBlock, criteriaBlock].filter(Boolean).join('\n\n');
 }
 
 module.exports = { buildSystemPrompt, parseSections, SKILL_HEADINGS, INTENSITY_HEADINGS };

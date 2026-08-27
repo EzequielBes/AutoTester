@@ -16,6 +16,7 @@
     </div>
     <nav class="tabs" role="tablist">
       <button type="button" class="tab active" id="tab-review" role="tab" aria-selected="true">Review</button>
+      <button type="button" class="tab" id="tab-tracks" role="tab" aria-selected="false">Trilhas</button>
       <button type="button" class="tab" id="tab-history" role="tab" aria-selected="false">Log</button>
     </nav>
   </header>
@@ -48,6 +49,23 @@
         <div id="branch-info" class="branch-info hidden"></div>
 
         <h2 class="panel-title">Arquivos</h2>
+        <div class="row">
+          <label class="grow">
+            Pasta
+            <select id="file-folder">
+              <option value="">Todas as pastas</option>
+            </select>
+          </label>
+          <label class="grow">
+            Filtro glob
+            <input type="text" id="file-glob" placeholder="Ex.: src/**, !**/*.test.js" />
+          </label>
+        </div>
+        <div class="file-selection-toolbar">
+          <span id="file-selection-count"></span>
+          <button type="button" id="select-visible-files-btn">Selecionar visíveis</button>
+          <button type="button" id="clear-file-selection-btn">Limpar seleção</button>
+        </div>
         <div id="file-list" class="inset"></div>
 
         <div class="row">
@@ -71,10 +89,18 @@
           </label>
         </div>
 
+        <label>
+          Trilha de validação
+          <select id="track-select">
+            <option value="">Execução única</option>
+          </select>
+        </label>
+
         <div class="actions">
           <button id="load-branches-btn">Carregar branches</button>
           <button id="load-files-btn">Carregar arquivos</button>
           <button id="run-btn" class="primary">Executar análise</button>
+          <button id="run-track-btn">Executar trilha</button>
         </div>
       </div>
 
@@ -92,7 +118,30 @@
 
       <div id="status" class="status"></div>
 
+      <section id="phase-results"></section>
       <section id="results"></section>
+    </section>
+
+    <section id="view-tracks" class="view hidden">
+      <div class="panel bracket" style="--d: 0">
+        <h2 class="panel-title">Trilha de validação</h2>
+        <label>
+          Nome
+          <input type="text" id="track-name" placeholder="Ex.: Pré-merge" maxlength="100" />
+        </label>
+        <p class="helper-text">As fases usam o mesmo snapshot de branch e arquivos. Comandos de teste são executados no working tree atual: não salve segredos nos argumentos.</p>
+        <div id="track-phase-list"></div>
+        <div class="actions">
+          <button id="new-track-btn">Nova trilha</button>
+          <button id="add-phase-btn">Adicionar fase</button>
+          <button id="save-track-btn" class="primary">Salvar trilha</button>
+          <button id="delete-track-btn">Excluir trilha</button>
+        </div>
+      </div>
+      <div class="panel bracket" style="--d: 1">
+        <h2 class="panel-title">Trilhas salvas</h2>
+        <div id="track-list"></div>
+      </div>
     </section>
 
     <section id="view-history" class="view hidden">

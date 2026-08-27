@@ -46,6 +46,12 @@ test('assembles base + skill + intensity blocks in order', () => {
   assert.ok(baseIdx >= 0 && skillIdx > baseIdx && intensityIdx > skillIdx);
 });
 
+test('appends optional phase criteria after the prompt blocks', () => {
+  const filePath = writeFixture();
+  const prompt = buildSystemPrompt(filePath, 'security', 'full', 'Require authorization checks.');
+  assert.ok(prompt.endsWith('Require authorization checks.'));
+});
+
 test('throws on unknown skill', () => {
   const filePath = writeFixture();
   assert.throws(() => buildSystemPrompt(filePath, 'nope', 'full'), /unknown skill/);

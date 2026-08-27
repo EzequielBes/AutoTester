@@ -219,7 +219,7 @@ label:first-of-type {
   white-space: nowrap;
 }
 
-input[type="text"], select {
+input[type="text"], input[type="number"], select, textarea {
   width: 100%;
   font-family: var(--mono);
   font-size: 13px;
@@ -233,6 +233,17 @@ input[type="text"], select {
 
 input[type="text"]::placeholder {
   color: var(--text-dim);
+}
+
+input[type="number"]:focus {
+  border-color: var(--cyan);
+}
+
+textarea {
+  width: 100%;
+  min-height: 76px;
+  resize: vertical;
+  line-height: 1.45;
 }
 
 input[type="text"]:focus, select:focus {
@@ -281,6 +292,40 @@ input[type="checkbox"] {
   border: 1px solid var(--line);
   padding: 4px;
   margin: 4px 0;
+}
+
+.file-selection-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+  flex-wrap: wrap;
+}
+
+.file-selection-toolbar span {
+  flex: 1;
+  min-width: 180px;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.file-selection-toolbar button {
+  padding: 6px 10px;
+  font-size: 9px;
+}
+
+.file-folder-group + .file-folder-group {
+  border-top: 1px solid var(--line);
+}
+
+.file-folder-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px;
+  color: var(--cyan);
+  font-size: 11px;
+  background: rgba(82, 230, 255, 0.05);
 }
 
 .inset:empty::before {
@@ -501,6 +546,36 @@ button.primary:hover:not(:disabled) {
 .finding.severity-medium { border-left-color: var(--amber); }
 .finding.severity-low { border-left-color: var(--cyan-dim); }
 
+.phase-result {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--cyan-dim);
+  padding: 14px 16px;
+  margin: 12px 0;
+}
+
+.phase-result.status-passed { border-left-color: var(--cyan); }
+.phase-result.status-failed,
+.phase-result.status-timed-out { border-left-color: var(--alert); }
+
+.phase-result-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.phase-log {
+  max-height: 240px;
+  overflow: auto;
+  white-space: pre-wrap;
+  background: var(--void);
+  border: 1px solid var(--line);
+  padding: 10px 12px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
 .finding-header {
   display: flex;
   align-items: center;
@@ -575,6 +650,67 @@ button.primary:hover:not(:disabled) {
   color: var(--text-dim);
   padding: 3px 9px;
   border: 1px solid var(--line);
+}
+
+/* --- Validation tracks --- */
+
+.helper-text {
+  font-family: var(--sans);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-dim);
+  margin: 10px 0 16px;
+}
+
+.phase-editor {
+  border: 1px solid var(--line);
+  background: var(--void);
+  padding: 14px;
+  margin: 12px 0;
+}
+
+.phase-editor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--cyan);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.phase-editor-header button {
+  padding: 5px 9px;
+  font-size: 9px;
+}
+
+.phase-fields.hidden {
+  display: none;
+}
+
+.track-list-entry {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  text-transform: none;
+  letter-spacing: normal;
+  margin: 8px 0;
+}
+
+.track-list-entry.active {
+  border-color: var(--cyan);
+  color: var(--cyan);
+}
+
+.track-list-entry span {
+  color: var(--text-dim);
+  font-size: 10px;
+  white-space: nowrap;
 }
 
 /* --- History --- */
