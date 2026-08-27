@@ -258,11 +258,13 @@ function buildTrackFromDraft(draft, existing) {
   return track;
 }
 
-ipcMain.handle('git:list-branches', (_event, repoPath) => {
+ipcMain.handle('git:list-branches', (event, repoPath) => {
+  assertTrustedRenderer(event);
   return listBranches(repoPath);
 });
 
-ipcMain.handle('git:list-files', (_event, repoPath, branch, changedOnly) => {
+ipcMain.handle('git:list-files', (event, repoPath, branch, changedOnly) => {
+  assertTrustedRenderer(event);
   return changedOnly ? listChangedFiles(repoPath, branch) : listAllFiles(repoPath, branch);
 });
 
@@ -270,15 +272,18 @@ app.on('before-quit', () => {
   validationTrackRuns.forEach((run) => run.controller.abort());
 });
 
-ipcMain.handle('git:filter-files', (_event, files, scope) => {
+ipcMain.handle('git:filter-files', (event, files, scope) => {
+  assertTrustedRenderer(event);
   return filterFiles(files, scope);
 });
 
-ipcMain.handle('git:branch-info', (_event, repoPath, branch) => {
+ipcMain.handle('git:branch-info', (event, repoPath, branch) => {
+  assertTrustedRenderer(event);
   return getBranchInfo(repoPath, branch);
 });
 
-ipcMain.handle('review:run', async (_event, { repoPath, branch, files, skill, intensity }) => {
+ipcMain.handle('review:run', async (event, { repoPath, branch, files, skill, intensity }) => {
+  assertTrustedRenderer(event);
   const systemPrompt = buildSystemPrompt(PROMPT_FILE, skill, intensity);
   const snapshot = createReviewSnapshot(repoPath, branch, files);
   const findings = await runClaudeReview(systemPrompt, snapshot.content);
@@ -299,7 +304,8 @@ ipcMain.handle('review:run', async (_event, { repoPath, branch, files, skill, in
   return { findings, fileContents: snapshot.fileContents, historyId: run.historyId, applyRunId: run.applyRunId, canApply: skill !== 'tests' };
 });
 
-ipcMain.handle('review:apply-finding', (_event, { repoPath, applyRunId, finding }) => {
+ipcMain.handle('review:apply-finding', (event, { repoPath, applyRunId, finding }) => {
+  assertTrustedRenderer(event);
   const review = reviewRuns.get(applyRunId);
   if (!review || review.repoPath !== repoPath) {
     throw new Error('review context is no longer available; run the analysis again');
@@ -326,7 +332,8 @@ ipcMain.handle('review:apply-finding', (_event, { repoPath, applyRunId, finding 
   return { applied: true };
 });
 
-ipcMain.handle('validation-tracks:list', () => {
+ipcMain.handle('validation-tracks:list', (event) => {
+  assertTrustedRenderer(event);
   return readValidationTracks(validationTracksFilePath());
 });
 
@@ -367,7 +374,8 @@ ipcMain.handle('validation-tracks:delete', (event, trackId) => {
   return true;
 });
 
-ipcMain.handle('agent-profiles:list', () => {
+ipcMain.handle('agent-profiles:list', (event) => {
+  assertTrustedRenderer(event);
   return readAgentProfiles(agentProfilesFilePath());
 });
 
@@ -397,7 +405,8 @@ ipcMain.handle('agent-profiles:delete', (event, profileId) => {
   return writeAgentProfiles(agentProfilesFilePath(), updatedProfiles);
 });
 
-ipcMain.handle('quality-skills:list', () => {
+ipcMain.handle('quality-skills:list', (event) => {
+  assertTrustedRenderer(event);
   return readQualitySkills(qualitySkillsFilePath());
 });
 
@@ -555,18 +564,21 @@ ipcMain.handle('validation-tracks:cancel', (event, executionId) => {
   return true;
 });
 
-ipcMain.handle('dialog:pick-folder', async () => {
+ipcMain.handle('dialog:pick-folder', async (event) => {
+  assertTrustedRenderer(event);
   const win = BrowserWindow.getFocusedWindow();
   const result = await dialog.showOpenDialog(win, { properties: ['openDirectory'] });
   return result.canceled ? null : result.filePaths[0];
 });
 
-ipcMain.handle('shell:reveal-repo', (_event, repoPath) => {
+ipcMain.handle('shell:reveal-repo', (event, repoPath) => {
+  assertTrustedRenderer(event);
   shell.showItemInFolder(path.resolve(repoPath));
   return true;
 });
 
-ipcMain.handle('shell:open-in-editor', (_event, { repoPath, file, lines }) => {
+ipcMain.handle('shell:open-in-editor', (event, { repoPath, file, lines }) => {
+  assertTrustedRenderer(event);
   const absolutePath = resolveInRepo(repoPath, file);
   if (!fs.existsSync(absolutePath)) {
     throw new Error(`arquivo não encontrado: ${file}`);
