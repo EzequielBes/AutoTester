@@ -12,7 +12,7 @@ Marque fases independentes como paralelas para executa-las em lotes de ate dois 
 
 Uma fase de comando executa no working tree da branch atualmente selecionada. Configure timeout, codigo de saida esperado e LCOV opcional. Nao inclua segredos no comando.
 
-Um gate de cobertura pode exigir minimo de linhas, limitar queda em pontos percentuais e avaliar todo LCOV ou apenas os arquivos selecionados. O ultimo resultado aprovado compativel e o baseline local.
+Um gate de cobertura pode exigir minimo de linhas, limitar queda em pontos percentuais e avaliar todo LCOV ou apenas os arquivos selecionados. O relatorio LCOV precisa ser criado ou atualizado pelo comando da fase; um arquivo antigo nao pode aprovar a execucao. O ultimo resultado aprovado compativel e o baseline local.
 
 ## Auditoria
 

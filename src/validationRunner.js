@@ -1,5 +1,7 @@
 'use strict';
 
+const fs = require('node:fs');
+const path = require('node:path');
 const { buildSystemPrompt } = require('./promptBuilder');
 const { runClaudeReview } = require('./claudeRunner');
 const { validateFindings } = require('./findingsSchema');
@@ -8,6 +10,24 @@ const { readLcovCoverage, selectCoverageFiles } = require('./lcovParser');
 const { DEFAULT_QUALITY_SKILLS } = require('./qualitySkillStore');
 
 const MAX_CLAUDE_CONCURRENCY = 2;
+
+function readCoverageFileState(repoPath, lcovPath, statSync = fs.statSync) {
+  if (!lcovPath) return null;
+  try {
+    const stat = statSync(path.resolve(repoPath, lcovPath));
+    return { size: stat.size, mtimeMs: stat.mtimeMs, ctimeMs: stat.ctimeMs };
+  } catch (error) {
+    if (error.code === 'ENOENT') return null;
+    throw error;
+  }
+}
+
+function coverageFileChanged(before, after) {
+  return after !== null && (before === null
+    || before.size !== after.size
+    || before.mtimeMs !== after.mtimeMs
+    || before.ctimeMs !== after.ctimeMs);
+}
 
 async function runClaudePhase(phase, { content, allowedFiles, promptFilePath, agentProfiles, qualitySkills, runReview, signal, onPhaseProgress }) {
   onPhaseProgress?.({ phaseId: phase.id, phaseName: phase.name, phaseType: 'claude', parallel: phase.parallel === true, status: 'running' });
@@ -90,8 +110,16 @@ function evaluateCoverageGate(gate, coverage, allowedFiles, baseline) {
   return { ...gate, lines: scopedCoverage.lines, baseline: baseline || null, passed: failures.length === 0, failures };
 }
 
-async function runCommandPhase(phase, { repoPath, allowedFiles, coverageBaseline, runCommandPhase: runCommandImpl, readCoverage, signal, onPhaseProgress }) {
+async function runCommandPhase(phase, { repoPath, allowedFiles, coverageBaseline, runCommandPhase: runCommandImpl, readCoverage, getCoverageFileState, signal, onPhaseProgress }) {
   onPhaseProgress?.({ phaseId: phase.id, phaseName: phase.name, phaseType: 'command', parallel: false, status: 'running' });
+  let coverageBefore = null;
+  try {
+    coverageBefore = phase.lcovPath ? getCoverageFileState(repoPath, phase.lcovPath) : null;
+  } catch (error) {
+    const result = { type: 'command', phaseId: phase.id, phaseName: phase.name, parallel: false, status: 'failed', commandResult: null, coverage: null, error: error.message };
+    onPhaseProgress?.({ phaseId: phase.id, phaseName: phase.name, phaseType: 'command', parallel: false, status: result.status, result });
+    return result;
+  }
   const commandResult = await runCommandImpl({ command: phase.command, cwd: repoPath, timeoutMs: phase.timeoutMs, signal });
   if (commandResult.cancelled) {
     const result = { type: 'command', phaseId: phase.id, phaseName: phase.name, parallel: false, status: 'cancelled', commandResult, coverage: null, error: null };
@@ -104,6 +132,9 @@ async function runCommandPhase(phase, { repoPath, allowedFiles, coverageBaseline
   let coverageGate = null;
   if (!commandResult.timedOut && !commandResult.error && commandResult.exitCode === phase.expectedExitCode) {
     try {
+      if (phase.lcovPath && !coverageFileChanged(coverageBefore, getCoverageFileState(repoPath, phase.lcovPath))) {
+        throw new Error(`LCOV report was not created or updated by command: ${phase.lcovPath}`);
+      }
       coverage = phase.lcovPath ? readCoverage(repoPath, phase.lcovPath) : null;
       coverageGate = evaluateCoverageGate(phase.coverageGate, coverage, allowedFiles, coverageBaseline);
       if (coverageGate && !coverageGate.passed) {
@@ -133,6 +164,7 @@ async function runValidationTrack({
   runReview = runClaudeReview,
   runCommandPhase: runCommandImpl = runCommand,
   readCoverage = readLcovCoverage,
+  getCoverageFileState = readCoverageFileState,
   coverageBaselines = {},
   signal,
   onPhaseProgress
@@ -173,6 +205,7 @@ async function runValidationTrack({
         coverageBaseline: coverageBaselines[phase.id],
         runCommandPhase: runCommandImpl,
         readCoverage,
+        getCoverageFileState,
         signal,
         onPhaseProgress
       });
@@ -184,4 +217,4 @@ async function runValidationTrack({
   return results;
 }
 
-module.exports = { MAX_CLAUDE_CONCURRENCY, runClaudePhase, runClaudeBatch, runCommandPhase, evaluateCoverageGate, runValidationTrack };
+module.exports = { MAX_CLAUDE_CONCURRENCY, readCoverageFileState, coverageFileChanged, runClaudePhase, runClaudeBatch, runCommandPhase, evaluateCoverageGate, runValidationTrack };

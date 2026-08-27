@@ -87,6 +87,10 @@ test('records command coverage for a passing command phase', async () => {
       commands += 1;
       return { exitCode: 0, timedOut: false, error: null, durationMs: 125, stdout: '', stderr: '' };
     },
+    getCoverageFileState: (() => {
+      let calls = 0;
+      return () => ++calls === 1 ? null : { size: 10, mtimeMs: 2, ctimeMs: 2 };
+    })(),
     readCoverage: () => ({ lines: { found: 4, hit: 3, pct: 75 }, files: [] }),
     runReview: async () => { throw new Error('must not run'); }
   });
@@ -95,6 +99,29 @@ test('records command coverage for a passing command phase', async () => {
   assert.equal(results.length, 1);
   assert.equal(results[0].status, 'passed');
   assert.equal(results[0].coverage.lines.pct, 75);
+});
+
+test('fails a command phase when its LCOV report is stale', async () => {
+  let coverageReads = 0;
+  const results = await runValidationTrack({
+    track: {
+      phases: [{
+        id: 'tests', type: 'command', name: 'Tests', command: 'npm test', timeoutMs: 600000,
+        lcovPath: 'coverage/lcov.info', expectedExitCode: 0
+      }]
+    },
+    content: '',
+    allowedFiles: [],
+    repoPath: 'C:\\repo',
+    promptFilePath,
+    runCommandPhase: async () => ({ exitCode: 0, timedOut: false, error: null, durationMs: 1, stdout: '', stderr: '' }),
+    getCoverageFileState: () => ({ size: 10, mtimeMs: 1, ctimeMs: 1 }),
+    readCoverage: () => { coverageReads += 1; return { lines: { found: 1, hit: 1, pct: 100 }, files: [] }; }
+  });
+
+  assert.equal(results[0].status, 'failed');
+  assert.match(results[0].error, /not created or updated/);
+  assert.equal(coverageReads, 0);
 });
 
 test('uses the selected agent profile instructions and returns its snapshot', async () => {
