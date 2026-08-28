@@ -253,6 +253,61 @@ main {
 #delivery-base-branch { font-family: var(--mono); }
 
 .delivery-flow-section { margin-top: 28px; }
+.delivery-chain-section { margin-top: 28px; }
+
+.inconsistency-list {
+  list-style: none;
+  margin: 4px 0;
+  padding: 0;
+}
+
+.inconsistency-list li {
+  background: var(--void);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--warning);
+  padding: 10px 12px;
+  margin: 8px 0;
+}
+
+.inconsistency-list li.empty-state {
+  border-left-color: var(--line);
+}
+
+.inconsistency-list time {
+  display: block;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.inconsistency-list p {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: var(--text);
+}
+
+.chain-suggestion {
+  margin-top: 14px;
+  padding: 12px 14px;
+  background: var(--void);
+  border: 1px solid var(--cyan-dim);
+}
+
+.chain-suggestion ol {
+  margin: 8px 0;
+  padding-left: 18px;
+  font-size: 12.5px;
+  color: var(--text);
+}
+
+.chain-confirmed:not(:empty) {
+  margin-top: 14px;
+  padding: 12px 14px;
+  background: var(--void);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--success);
+  font-size: 12.5px;
+}
 
 .rule-row,
 .check-row {

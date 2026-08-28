@@ -90,6 +90,27 @@
             <div id="delivery-flow-snapshot-summary"></div>
           </section>
 
+          <section class="delivery-chain-section" aria-labelledby="delivery-chain-title">
+            <h2 id="delivery-chain-title" class="panel-title">Cadeia e Azure</h2>
+            <p class="helper-text">Sincronize com o Azure DevOps pelo MCP do Claude CLI e revise uma sugestão de cadeia antes de confirmá-la.</p>
+            <div class="actions">
+              <button type="button" id="sync-azure-btn">Sincronizar com Azure</button>
+              <button type="button" id="suggest-chain-btn">Sugerir cadeia</button>
+            </div>
+            <p id="delivery-sync-status" class="status" role="status"></p>
+            <ul id="delivery-inconsistency-list" class="inconsistency-list" aria-label="Inconsistências"></ul>
+            <div id="delivery-chain-suggestion" class="chain-suggestion" hidden>
+              <p class="panel-title">Sugestão de cadeia (não confirmada)</p>
+              <p id="chain-suggestion-evidence" class="helper-text"></p>
+              <ol id="chain-suggestion-list"></ol>
+              <div class="actions">
+                <button type="button" id="accept-chain-btn" class="primary">Aceitar</button>
+                <button type="button" id="reject-chain-btn">Rejeitar</button>
+              </div>
+            </div>
+            <div id="delivery-chain-confirmed" class="chain-confirmed"></div>
+          </section>
+
           <section class="delivery-timeline-section" aria-labelledby="delivery-timeline-title">
             <h2 id="delivery-timeline-title" class="panel-title">Linha do tempo</h2>
             <div id="delivery-timeline"></div>

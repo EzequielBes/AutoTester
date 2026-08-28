@@ -27,6 +27,7 @@ let activeTrackExecutionId = null;
 let livePhaseResults = new Map();
 let deliveries = [];
 let editingDeliveryId = null;
+let chainSuggestionState = null;
 let projectPolicies = [];
 let discoveredRules = [];
 let selectedPolicyIds = new Set();
@@ -290,6 +291,10 @@ function renderDeliveryDetail(delivery) {
   renderDeliveryQualitySkillList();
   renderFlowSnapshotSummary(delivery.flowSnapshot);
   document.getElementById('delivery-flow-status').textContent = '';
+  rejectChainSuggestion();
+  document.getElementById('delivery-sync-status').textContent = '';
+  renderInconsistencyList(delivery);
+  renderChainConfirmed(delivery);
 }
 
 function renderDeliveryEditor(delivery) {
@@ -320,6 +325,10 @@ function renderDeliveryEditor(delivery) {
     renderDeliveryQualitySkillList();
     renderFlowSnapshotSummary(null);
     document.getElementById('delivery-flow-status').textContent = 'Salve a entrega antes de configurar o fluxo.';
+    rejectChainSuggestion();
+    document.getElementById('delivery-sync-status').textContent = '';
+    renderInconsistencyList({ events: [] });
+    renderChainConfirmed({ chain: null });
   }
 }
 
@@ -556,6 +565,126 @@ function renderFlowSnapshotSummary(flowSnapshot) {
   summary.appendChild(counts);
   container.appendChild(summary);
 }
+
+// --- Delivery chain and Azure sync ---
+
+function renderInconsistencyList(delivery) {
+  const list = document.getElementById('delivery-inconsistency-list');
+  list.textContent = '';
+  const inconsistencyEvents = (delivery.events || []).filter((event) => event.kind === 'inconsistency');
+  if (inconsistencyEvents.length === 0) {
+    const empty = document.createElement('li');
+    empty.className = 'empty-state';
+    empty.textContent = 'Nenhuma inconsistência registrada.';
+    list.appendChild(empty);
+    return;
+  }
+  inconsistencyEvents.forEach((event) => {
+    const item = document.createElement('li');
+    const timestamp = document.createElement('time');
+    timestamp.className = 'technical-value';
+    timestamp.dateTime = event.timestamp;
+    timestamp.textContent = new Date(event.timestamp).toLocaleString('pt-BR');
+    const detail = document.createElement('p');
+    detail.textContent = event.detail;
+    item.append(timestamp, detail);
+    list.appendChild(item);
+  });
+}
+
+function renderChainConfirmed(delivery) {
+  const container = document.getElementById('delivery-chain-confirmed');
+  container.textContent = '';
+  if (!delivery.chain) return;
+  const summary = document.createElement('p');
+  summary.textContent = `Posição ${delivery.chain.position} na cadeia ${delivery.chain.chainId}`;
+  container.appendChild(summary);
+}
+
+function setSyncStatus(message, kind) {
+  const el = document.getElementById('delivery-sync-status');
+  el.textContent = message;
+  el.classList.remove('running', 'error');
+  if (kind) el.classList.add(kind);
+}
+
+async function syncAzure() {
+  if (!editingDeliveryId) {
+    setSyncStatus('Salve a entrega antes de sincronizar com o Azure.', 'error');
+    return;
+  }
+  setSyncStatus('Sincronizando...', 'running');
+  try {
+    const updated = await window.api.syncAzure(editingDeliveryId);
+    deliveries = deliveries.map((item) => item.id === updated.id ? updated : item);
+    renderInconsistencyList(updated);
+    setSyncStatus('Sincronizado.');
+  } catch (err) {
+    setSyncStatus(`Erro ao sincronizar com o Azure: ${err.message}`, 'error');
+  }
+}
+
+async function suggestChain() {
+  if (!editingDeliveryId) {
+    setSyncStatus('Salve a entrega antes de sugerir uma cadeia.', 'error');
+    return;
+  }
+  setSyncStatus('Sugerindo cadeia...', 'running');
+  try {
+    const result = await window.api.suggestChain([editingDeliveryId]);
+    chainSuggestionState = result;
+    const container = document.getElementById('delivery-chain-suggestion');
+    const evidence = document.getElementById('chain-suggestion-evidence');
+    const list = document.getElementById('chain-suggestion-list');
+    evidence.textContent = result.evidence;
+    list.textContent = '';
+    (result.suggestion || []).forEach((entry) => {
+      const item = document.createElement('li');
+      item.textContent = `${entry.deliveryId} — posição ${entry.position}`;
+      list.appendChild(item);
+    });
+    container.hidden = false;
+    setSyncStatus('Sugestão pronta. Revise antes de confirmar.');
+  } catch (err) {
+    setSyncStatus(`Erro ao sugerir cadeia: ${err.message}`, 'error');
+  }
+}
+
+async function acceptChainSuggestion() {
+  if (!chainSuggestionState) return;
+  const chainId = `chain-${Date.now()}`;
+  const entries = chainSuggestionState.suggestion.map((entry) => ({
+    deliveryId: entry.deliveryId,
+    chainId,
+    position: entry.position,
+    dependsOn: entry.dependsOn
+  }));
+  try {
+    const updated = await window.api.confirmChain(entries);
+    deliveries = deliveries.map((item) => {
+      const match = updated.find((u) => u.id === item.id);
+      return match || item;
+    });
+    rejectChainSuggestion();
+    const current = deliveries.find((item) => item.id === editingDeliveryId);
+    if (current) renderChainConfirmed(current);
+    setSyncStatus('Cadeia confirmada.');
+  } catch (err) {
+    setSyncStatus(`Erro ao confirmar cadeia: ${err.message}`, 'error');
+  }
+}
+
+function rejectChainSuggestion() {
+  chainSuggestionState = null;
+  document.getElementById('delivery-chain-suggestion').hidden = true;
+  document.getElementById('chain-suggestion-evidence').textContent = '';
+  document.getElementById('chain-suggestion-list').textContent = '';
+}
+
+document.getElementById('sync-azure-btn').addEventListener('click', syncAzure);
+document.getElementById('suggest-chain-btn').addEventListener('click', suggestChain);
+document.getElementById('accept-chain-btn').addEventListener('click', acceptChainSuggestion);
+document.getElementById('reject-chain-btn').addEventListener('click', rejectChainSuggestion);
 
 document.getElementById('discover-rules-btn').addEventListener('click', async () => {
   const repoPath = document.getElementById('delivery-repo-path').value.trim();
