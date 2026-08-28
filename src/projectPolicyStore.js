@@ -46,6 +46,11 @@ function writeProjectPolicies(filePath, policies) {
     throw new Error('policies must be an array');
   }
   policies.forEach(validatePolicy);
+  const policyIds = new Set();
+  policies.forEach((policy) => {
+    if (policyIds.has(policy.id)) throw new Error('policy ids must be unique');
+    policyIds.add(policy.id);
+  });
   const temporaryPath = path.join(path.dirname(filePath), `.${path.basename(filePath)}.${process.pid}.tmp`);
   fs.writeFileSync(temporaryPath, JSON.stringify({ version: STORE_VERSION, policies }, null, 2));
   fs.renameSync(temporaryPath, filePath);

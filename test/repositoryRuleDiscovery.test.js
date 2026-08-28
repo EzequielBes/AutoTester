@@ -71,6 +71,42 @@ test('discovers PR templates from the repository', () => {
   assert.ok(rules.some((r) => r.path.includes('PULL_REQUEST_TEMPLATE')));
 });
 
+test('discovers PR templates with custom filenames in PULL_REQUEST_TEMPLATE directory', () => {
+  const dir = makeFixtureRepo();
+  const templatesDir = path.join(dir, '.github', 'PULL_REQUEST_TEMPLATE');
+  fs.mkdirSync(templatesDir, { recursive: true });
+  fs.writeFileSync(path.join(templatesDir, 'bug_report.md'), 'Bug report template\n');
+  fs.writeFileSync(path.join(templatesDir, 'feature.md'), 'Feature request template\n');
+  run(dir, ['add', '.github']);
+  run(dir, ['commit', '-m', 'initial']);
+
+  const rules = discoverRepositoryRules(dir, 'main');
+  assert.ok(rules.some((r) => r.path === '.github/PULL_REQUEST_TEMPLATE/bug_report.md'));
+  assert.ok(rules.some((r) => r.path === '.github/PULL_REQUEST_TEMPLATE/feature.md'));
+});
+
+test('discovers root-level PULL_REQUEST_TEMPLATE.md', () => {
+  const dir = makeFixtureRepo();
+  fs.writeFileSync(path.join(dir, 'PULL_REQUEST_TEMPLATE.md'), 'PR template at root\n');
+  run(dir, ['add', 'PULL_REQUEST_TEMPLATE.md']);
+  run(dir, ['commit', '-m', 'initial']);
+
+  const rules = discoverRepositoryRules(dir, 'main');
+  assert.ok(rules.some((r) => r.path === 'PULL_REQUEST_TEMPLATE.md'));
+});
+
+test('discovers docs/pull_request_template.md', () => {
+  const dir = makeFixtureRepo();
+  const docsDir = path.join(dir, 'docs');
+  fs.mkdirSync(docsDir, { recursive: true });
+  fs.writeFileSync(path.join(docsDir, 'pull_request_template.md'), 'PR template in docs\n');
+  run(dir, ['add', 'docs']);
+  run(dir, ['commit', '-m', 'initial']);
+
+  const rules = discoverRepositoryRules(dir, 'main');
+  assert.ok(rules.some((r) => r.path === 'docs/pull_request_template.md'));
+});
+
 test('does not discover files outside the allowlist', () => {
   const dir = makeFixtureRepo();
   fs.writeFileSync(path.join(dir, 'README.md'), 'This should not be discovered\n');

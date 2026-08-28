@@ -40,7 +40,7 @@ test('rejects a policy store with an unsupported schema', () => {
   assert.throws(() => readProjectPolicies(file), /unsupported schema/);
 });
 
-test('truncates excerpts that exceed the maximum length', () => {
+test('rejects excerpts that exceed the maximum length', () => {
   const file = tmpFile();
   const longExcerpt = 'a'.repeat(5000);
   const policies = [
@@ -71,4 +71,14 @@ test('accepts multiple policies and persists them', () => {
   assert.equal(read.length, 2);
   assert.equal(read[0].path, 'AGENTS.md');
   assert.equal(read[1].path, 'CLAUDE.md');
+});
+
+test('rejects duplicate policy ids', () => {
+  const file = tmpFile();
+  const policies = [
+    { id: 'policy-1', path: 'AGENTS.md', excerpt: 'Agent rules' },
+    { id: 'policy-1', path: 'CLAUDE.md', excerpt: 'Claude config' }
+  ];
+
+  assert.throws(() => writeProjectPolicies(file, policies), /policy ids must be unique/);
 });
