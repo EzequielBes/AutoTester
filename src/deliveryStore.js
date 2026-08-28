@@ -4,7 +4,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const STORE_VERSION = 1;
+const STORE_VERSION = 2;
 const MAX_TEXT_LENGTH = 2000;
 const DELIVERY_STATUSES = new Set([
   'draft', 'active', 'blocked', 'validating', 'ready-for-pr',
@@ -25,6 +25,13 @@ function validateEvent(event) {
   validateText(event.detail, 'event.detail', { required: true });
 }
 
+function validateFlowSnapshot(flowSnapshot) {
+  if (flowSnapshot === null || flowSnapshot === undefined) return;
+  if (typeof flowSnapshot !== 'object' || Array.isArray(flowSnapshot)) {
+    throw new Error('delivery.flowSnapshot must be an object');
+  }
+}
+
 function validateDelivery(delivery) {
   if (!delivery || typeof delivery !== 'object' || Array.isArray(delivery)) {
     throw new Error('delivery must be an object');
@@ -42,6 +49,7 @@ function validateDelivery(delivery) {
   validateText(delivery.updatedAt, 'delivery.updatedAt', { required: true });
   if (!Array.isArray(delivery.events)) throw new Error('delivery.events must be an array');
   delivery.events.forEach(validateEvent);
+  validateFlowSnapshot(delivery.flowSnapshot);
 }
 
 function validateDeliveries(deliveries) {
@@ -54,6 +62,10 @@ function validateDeliveries(deliveries) {
   });
 }
 
+function migrateV1Delivery(delivery) {
+  return { ...delivery, flowSnapshot: null };
+}
+
 function readDeliveries(filePath) {
   if (!fs.existsSync(filePath)) return [];
   let data;
@@ -62,11 +74,15 @@ function readDeliveries(filePath) {
   } catch {
     throw new Error('delivery storage is corrupted');
   }
-  if (!data || data.version !== STORE_VERSION || !Array.isArray(data.deliveries)) {
+  if (!data || !Array.isArray(data.deliveries)) {
     throw new Error('delivery storage has an unsupported schema');
   }
-  validateDeliveries(data.deliveries);
-  return data.deliveries;
+  const deliveries = data.version === 1
+    ? data.deliveries.map(migrateV1Delivery)
+    : data.version === STORE_VERSION ? data.deliveries : null;
+  if (!deliveries) throw new Error('delivery storage has an unsupported schema');
+  validateDeliveries(deliveries);
+  return deliveries;
 }
 
 function readDelivery(filePath, deliveryId) {

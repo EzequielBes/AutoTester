@@ -105,6 +105,10 @@ function qualitySkillsFilePath() {
   return path.join(app.getPath('userData'), 'quality-skills.json');
 }
 
+function projectPoliciesFilePath() {
+  return path.join(app.getPath('userData'), 'project-policies.json');
+}
+
 function assertTrustedRenderer(event) {
   if (event.senderFrame.url !== localRendererUrl()) {
     throw new Error('validation commands are only available from the local renderer');
@@ -118,7 +122,14 @@ registerHistoryIpc(ipcMain, {
   getWindowFromWebContents: BrowserWindow.fromWebContents
 });
 
-registerDeliveryIpc(ipcMain, { deliveriesFilePath, assertTrustedRenderer });
+registerDeliveryIpc(ipcMain, {
+  deliveriesFilePath,
+  projectPoliciesFilePath,
+  validationTracksFilePath,
+  agentProfilesFilePath,
+  qualitySkillsFilePath,
+  assertTrustedRenderer
+});
 
 function createReviewSnapshot(repoPath, branch, files) {
   if (!branch) throw new Error('a branch must be selected before running a review');

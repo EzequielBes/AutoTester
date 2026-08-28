@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const {
+  STORE_VERSION,
   validateDelivery,
   readDelivery,
   readDeliveries,
@@ -49,7 +50,7 @@ test('writes a versioned delivery store and reads it back', () => {
   assert.deepEqual(readDeliveries(file), deliveries);
   assert.equal(readDelivery(file, 'delivery-1').id, 'delivery-1');
   assert.equal(readDelivery(file, 'missing'), null);
-  assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).version, 1);
+  assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).version, STORE_VERSION);
 });
 
 test('uses a distinct UUID for each temporary delivery file', () => {
@@ -97,4 +98,60 @@ test('rejects an event without required string details', () => {
   invalid.events[0].detail = '';
 
   assert.throws(() => validateDelivery(invalid), /event.detail must not be empty/);
+});
+
+test('migrates a v1 delivery store to v2 with an absent flowSnapshot, keeping existing fields', () => {
+  const file = tmpFile();
+  const v1Delivery = delivery();
+  fs.writeFileSync(file, JSON.stringify({ version: 1, deliveries: [v1Delivery] }, null, 2));
+
+  const [migrated] = readDeliveries(file);
+
+  assert.equal(migrated.flowSnapshot, null);
+  assert.equal(migrated.id, v1Delivery.id);
+  assert.equal(migrated.repoPath, v1Delivery.repoPath);
+  assert.equal(migrated.objective, v1Delivery.objective);
+  assert.deepEqual(migrated.events, v1Delivery.events);
+});
+
+test('writes deliveries under the current store version', () => {
+  const file = tmpFile();
+  writeDeliveries(file, [delivery()]);
+
+  assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).version, STORE_VERSION);
+});
+
+test('round-trips a delivery with a flowSnapshot', () => {
+  const file = tmpFile();
+  const withSnapshot = {
+    ...delivery(),
+    flowSnapshot: {
+      selectedPolicies: [{ id: 'policy-1', path: 'AGENTS.md', excerpt: 'Follow the rules.' }],
+      track: {
+        id: 'track-1',
+        name: 'Pre-merge',
+        phases: [{
+          id: 'phase-1',
+          type: 'claude',
+          name: 'Security',
+          agent: 'claude',
+          skill: 'security',
+          intensity: 'full',
+          criteria: 'Check authorization.'
+        }]
+      },
+      agentProfiles: [{ id: 'claude', name: 'Claude padrão', runtime: 'claude', instructions: '' }],
+      qualitySkills: [{ id: 'security', name: 'Segurança', baseSkill: 'security', instructions: '', canApply: true }]
+    }
+  };
+
+  writeDeliveries(file, [withSnapshot]);
+
+  assert.deepEqual(readDeliveries(file)[0].flowSnapshot, withSnapshot.flowSnapshot);
+});
+
+test('rejects a flowSnapshot that is not an object', () => {
+  const invalid = { ...delivery(), flowSnapshot: 'not-an-object' };
+
+  assert.throws(() => validateDelivery(invalid), /flowSnapshot must be an object/);
 });

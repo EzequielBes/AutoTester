@@ -3,11 +3,15 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { writeDeliveries } = require('../src/deliveryStore');
+const { writeDeliveries, readDeliveries } = require('../src/deliveryStore');
+const { writeProjectPolicies } = require('../src/projectPolicyStore');
+const { writeValidationTracks } = require('../src/validationTrackStore');
+const { writeAgentProfiles } = require('../src/agentProfileStore');
+const { writeQualitySkills } = require('../src/qualitySkillStore');
 const { registerDeliveryIpc } = require('../src/deliveryIpc');
 
-function tmpFile() {
-  return path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'delivery-ipc-')), 'deliveries.json');
+function tmpFile(name = 'deliveries.json') {
+  return path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'delivery-ipc-')), name);
 }
 
 function draft(overrides = {}) {
@@ -37,11 +41,28 @@ function setup(options = {}) {
   const handlers = new Map();
   const deliveriesPath = tmpFile();
   if (options.deliveries) writeDeliveries(deliveriesPath, options.deliveries);
+
+  const policiesPath = tmpFile('policies.json');
+  if (options.policies) writeProjectPolicies(policiesPath, options.policies);
+
+  const tracksPath = tmpFile('tracks.json');
+  if (options.tracks) writeValidationTracks(tracksPath, options.tracks);
+
+  const profilesPath = tmpFile('profiles.json');
+  if (options.profiles) writeAgentProfiles(profilesPath, options.profiles);
+
+  const skillsPath = tmpFile('skills.json');
+  if (options.skills) writeQualitySkills(skillsPath, options.skills);
+
   registerDeliveryIpc({ handle: (channel, handler) => handlers.set(channel, handler) }, {
     deliveriesFilePath: () => deliveriesPath,
+    projectPoliciesFilePath: () => policiesPath,
+    validationTracksFilePath: () => tracksPath,
+    agentProfilesFilePath: () => profilesPath,
+    qualitySkillsFilePath: () => skillsPath,
     assertTrustedRenderer: options.assertTrustedRenderer || (() => {})
   });
-  return { handlers };
+  return { handlers, deliveriesPath };
 }
 
 test('registers guarded delivery handlers and creates a delivery', () => {
@@ -96,4 +117,106 @@ test('sets an update timestamp strictly later than the stored timestamp', () => 
   const saved = handlers.get('deliveries:save')({ sender: {} }, draft({ id: original.id }));
 
   assert.ok(Date.parse(saved.updatedAt) > Date.parse(original.updatedAt));
+});
+
+test('rejects flow snapshot build calls from an untrusted renderer', () => {
+  const { handlers } = setup({ assertTrustedRenderer: () => { throw new Error('untrusted'); } });
+
+  assert.throws(() => handlers.get('deliveries:build-flow-snapshot')({ sender: {} }, {
+    deliveryId: 'delivery-1',
+    selection: {}
+  }), /untrusted/);
+});
+
+test('builds a flow snapshot from current policy, track, profile and skill records', () => {
+  const original = storedDelivery();
+  const policy = { id: 'policy-1', path: 'AGENTS.md', excerpt: 'Follow the rules.' };
+  const track = {
+    id: 'track-1',
+    name: 'Pre-merge',
+    phases: [{
+      id: 'phase-1',
+      type: 'claude',
+      name: 'Security',
+      agent: 'claude',
+      skill: 'security',
+      intensity: 'full',
+      criteria: 'Check authorization.'
+    }]
+  };
+  const profile = { id: 'custom-agent', name: 'Custom agent', runtime: 'claude', instructions: 'Be careful.' };
+  const skill = {
+    id: 'custom-skill',
+    name: 'Custom skill',
+    baseSkill: 'general',
+    instructions: 'Look for bugs.',
+    canApply: true
+  };
+
+  const { handlers, deliveriesPath } = setup({
+    deliveries: [original],
+    policies: [policy],
+    tracks: [track],
+    profiles: [profile],
+    skills: [skill]
+  });
+
+  const saved = handlers.get('deliveries:build-flow-snapshot')({ sender: {} }, {
+    deliveryId: original.id,
+    selection: {
+      policyIds: ['policy-1'],
+      trackId: 'track-1',
+      agentProfileIds: ['custom-agent'],
+      qualitySkillIds: ['custom-skill']
+    }
+  });
+
+  assert.deepEqual(saved.flowSnapshot.selectedPolicies, [policy]);
+  assert.deepEqual(saved.flowSnapshot.track, track);
+  assert.deepEqual(saved.flowSnapshot.agentProfiles, [profile]);
+  assert.deepEqual(saved.flowSnapshot.qualitySkills, [skill]);
+  assert.deepEqual(readDeliveries(deliveriesPath).find((d) => d.id === original.id).flowSnapshot, saved.flowSnapshot);
+});
+
+test('flow snapshot is a deep copy that does not change when the source records are edited later', () => {
+  const original = storedDelivery();
+  const policy = { id: 'policy-1', path: 'AGENTS.md', excerpt: 'Follow the rules.' };
+  const track = {
+    id: 'track-1',
+    name: 'Pre-merge',
+    phases: [{
+      id: 'phase-1',
+      type: 'claude',
+      name: 'Security',
+      agent: 'claude',
+      skill: 'security',
+      intensity: 'full',
+      criteria: 'Check authorization.'
+    }]
+  };
+
+  const { handlers } = setup({ deliveries: [original], policies: [policy], tracks: [track] });
+
+  const saved = handlers.get('deliveries:build-flow-snapshot')({ sender: {} }, {
+    deliveryId: original.id,
+    selection: { policyIds: ['policy-1'], trackId: 'track-1' }
+  });
+
+  const snapshotBefore = JSON.parse(JSON.stringify(saved.flowSnapshot));
+
+  // Mutate the objects that were used to build the snapshot; the stored snapshot must be unaffected.
+  policy.excerpt = 'Mutated after snapshot.';
+  track.name = 'Mutated after snapshot.';
+  track.phases[0].criteria = 'Mutated after snapshot.';
+
+  assert.deepEqual(saved.flowSnapshot, snapshotBefore);
+});
+
+test('rejects an unknown delivery id when building a flow snapshot', () => {
+  const { handlers } = setup({ deliveries: [storedDelivery()] });
+
+  assert.throws(() => handlers.get('deliveries:build-flow-snapshot')({ sender: {} }, {
+    deliveryId: 'missing',
+    selection: {}
+  }), /delivery was not found/);
 });
