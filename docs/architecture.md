@@ -12,7 +12,7 @@ Uma analise le o conteudo do commit da branch selecionada. Antes de aplicar um f
 
 ## Persistencia
 
-Trilhas, perfis e skills usam JSON local versionado. O historico tambem usa escrita atomica e recusa arquivos corrompidos para evitar apagar evidencias silenciosamente. A retencao padrao preserva as ultimas 250 execucoes e pode ser ajustada no Log entre 10 e 10.000 entradas; reduzir o limite remove imediatamente as entradas mais antigas.
+Trilhas, perfis e skills usam JSON local versionado. O historico tambem usa escrita atomica e recusa arquivos corrompidos para evitar apagar evidencias silenciosamente. A aplicacao aceita apenas uma instancia por perfil de usuario, evitando atualizacoes concorrentes nesses arquivos. A retencao padrao preserva as ultimas 250 execucoes e pode ser ajustada no Log entre 10 e 10.000 entradas; reduzir o limite remove imediatamente as entradas mais antigas.
 
 ## Execucao
 

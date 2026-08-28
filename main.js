@@ -30,6 +30,7 @@ const { registerHistoryIpc } = require('./src/historyIpc');
 const { readHistorySettings, writeHistorySettings } = require('./src/historySettingsStore');
 const { DEFAULT_AGENT_PROFILE, readAgentProfiles, writeAgentProfiles, validateProfile } = require('./src/agentProfileStore');
 const { DEFAULT_QUALITY_SKILLS, readQualitySkills, writeQualitySkills, validateSkill } = require('./src/qualitySkillStore');
+const { startSingleInstanceApp } = require('./src/appLifecycle');
 
 const PROMPT_FILE = path.join(__dirname, 'prompts', 'review-prompt.md');
 const reviewRuns = new Map();
@@ -52,7 +53,7 @@ function createWindow() {
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
 }
 
-app.whenReady().then(createWindow);
+startSingleInstanceApp(app, createWindow);
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
