@@ -27,6 +27,7 @@ const { readValidationTracks, writeValidationTracks, validateTrack } = require('
 const { runValidationTrack } = require('./src/validationRunner');
 const { filterFiles } = require('./src/fileScope');
 const { registerHistoryIpc } = require('./src/historyIpc');
+const { registerDeliveryIpc } = require('./src/deliveryIpc');
 const { readHistorySettings, writeHistorySettings } = require('./src/historySettingsStore');
 const { DEFAULT_AGENT_PROFILE, readAgentProfiles, writeAgentProfiles, validateProfile } = require('./src/agentProfileStore');
 const { DEFAULT_QUALITY_SKILLS, readQualitySkills, writeQualitySkills, validateSkill } = require('./src/qualitySkillStore');
@@ -83,6 +84,10 @@ function historySettingsFilePath() {
   return path.join(app.getPath('userData'), 'history-settings.json');
 }
 
+function deliveriesFilePath() {
+  return path.join(app.getPath('userData'), 'deliveries.json');
+}
+
 function appendAuditHistory(entry) {
   const { maxEntries } = readHistorySettings(historySettingsFilePath());
   return appendHistoryEntry(historyFilePath(), entry, maxEntries);
@@ -112,6 +117,8 @@ registerHistoryIpc(ipcMain, {
   showSaveDialog: dialog.showSaveDialog,
   getWindowFromWebContents: BrowserWindow.fromWebContents
 });
+
+registerDeliveryIpc(ipcMain, { deliveriesFilePath, assertTrustedRenderer });
 
 function createReviewSnapshot(repoPath, branch, files) {
   if (!branch) throw new Error('a branch must be selected before running a review');

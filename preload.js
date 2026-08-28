@@ -31,6 +31,9 @@ contextBridge.exposeInMainWorld('api', {
   recordFindingDecision: (params) => ipcRenderer.invoke('history:record-finding-decision', params),
   readHistorySettings: () => ipcRenderer.invoke('history-settings:read'),
   saveHistorySettings: (settings) => ipcRenderer.invoke('history-settings:save', settings),
+  listDeliveries: () => ipcRenderer.invoke('deliveries:list'),
+  openDelivery: (deliveryId) => ipcRenderer.invoke('deliveries:open', deliveryId),
+  saveDelivery: (draft) => ipcRenderer.invoke('deliveries:save', draft),
   pickFolder: () => ipcRenderer.invoke('dialog:pick-folder'),
   revealRepo: (repoPath) => ipcRenderer.invoke('shell:reveal-repo', repoPath),
   openInEditor: (params) => ipcRenderer.invoke('shell:open-in-editor', params)
