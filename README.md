@@ -12,7 +12,7 @@ Aplicação Electron local para validar qualidade de repositórios Git com Claud
 - Histórico somente leitura com findings, decisões, cobertura, gates, logs opt-in limitados e exportação JSON/Markdown.
 - Log filtrável por texto, tipo, status e período, com retenção local configurável.
 
-Veja `docs/architecture.md` e `docs/validation-tracks.md` para o modelo e limites operacionais.
+Veja `docs/roadmap.md`, `docs/architecture.md` e `docs/validation-tracks.md` para objetivo, estado atual, arquitetura e limites operacionais.
 
 ## Requirements
 
