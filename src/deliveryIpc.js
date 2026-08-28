@@ -18,7 +18,7 @@ function buildDeliveryFromDraft(draft, existing) {
     objective: draft.objective,
     branch: draft.branch,
     baseBranch: draft.baseBranch,
-    status: 'draft',
+    status: existing ? existing.status : 'draft',
     nextAction: draft.nextAction,
     blockedReason: draft.blockedReason,
     createdAt: existing ? existing.createdAt : now.toISOString(),

@@ -79,6 +79,17 @@ test('updates an existing delivery without accepting renderer timestamps', () =>
   assert.equal(saved.objective, 'Updated objective.');
 });
 
+test('preserves the stored status when editing an existing delivery', () => {
+  const original = { ...storedDelivery(), status: 'blocked' };
+  const { handlers } = setup({ deliveries: [original] });
+  const saved = handlers.get('deliveries:save')({ sender: {} }, draft({
+    id: original.id,
+    objective: 'Updated objective.'
+  }));
+
+  assert.equal(saved.status, 'blocked');
+});
+
 test('sets an update timestamp strictly later than the stored timestamp', () => {
   const original = { ...storedDelivery(), updatedAt: '2999-01-01T00:00:00.000Z' };
   const { handlers } = setup({ deliveries: [original] });

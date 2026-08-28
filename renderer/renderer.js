@@ -180,7 +180,7 @@ function switchTab(name) {
   [['deliveries', isDeliveries], ['review', isReview], ['tracks', isTracks], ['history', isHistory]].forEach(([tab, active]) => {
     const element = document.getElementById(`tab-${tab}`);
     element.classList.toggle('active', active);
-    element.setAttribute('aria-selected', String(active));
+    element.setAttribute('aria-pressed', String(active));
   });
   if (isDeliveries) loadDeliveries();
   if (isTracks) {
