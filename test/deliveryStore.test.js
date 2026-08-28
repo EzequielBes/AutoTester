@@ -1,5 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -49,6 +50,25 @@ test('writes a versioned delivery store and reads it back', () => {
   assert.equal(readDelivery(file, 'delivery-1').id, 'delivery-1');
   assert.equal(readDelivery(file, 'missing'), null);
   assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).version, 1);
+});
+
+test('uses a distinct UUID for each temporary delivery file', () => {
+  const originalRandomUUID = crypto.randomUUID;
+  const uuids = [];
+  crypto.randomUUID = () => {
+    const uuid = `uuid-${uuids.length + 1}`;
+    uuids.push(uuid);
+    return uuid;
+  };
+  try {
+    const file = tmpFile();
+    writeDeliveries(file, [delivery()]);
+    writeDeliveries(file, [delivery()]);
+  } finally {
+    crypto.randomUUID = originalRandomUUID;
+  }
+
+  assert.deepEqual(uuids, ['uuid-1', 'uuid-2']);
 });
 
 test('rejects a corrupted delivery store instead of silently discarding it', () => {

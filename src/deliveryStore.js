@@ -1,5 +1,6 @@
 'use strict';
 
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -74,7 +75,7 @@ function readDelivery(filePath, deliveryId) {
 
 function writeDeliveries(filePath, deliveries) {
   validateDeliveries(deliveries);
-  const temporaryPath = path.join(path.dirname(filePath), `.${path.basename(filePath)}.${process.pid}.tmp`);
+  const temporaryPath = path.join(path.dirname(filePath), `.${path.basename(filePath)}.${process.pid}.${crypto.randomUUID()}.tmp`);
   fs.writeFileSync(temporaryPath, JSON.stringify({ version: STORE_VERSION, deliveries }, null, 2));
   fs.renameSync(temporaryPath, filePath);
   return deliveries;
