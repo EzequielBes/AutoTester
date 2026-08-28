@@ -149,7 +149,6 @@ populateRecentRepos();
 loadValidationTracks();
 loadAgentProfiles();
 loadQualitySkills();
-loadProjectPolicies();
 renderDeliveryEditor(null);
 switchTab('deliveries');
 
@@ -190,10 +189,7 @@ function switchTab(name) {
   });
   if (isDeliveries) {
     loadDeliveries();
-    loadValidationTracks();
-    loadAgentProfiles();
-    loadQualitySkills();
-    loadProjectPolicies().then(() => renderDeliveryPolicyList());
+    loadDeliveryFlowLists();
   }
   if (isTracks) {
     loadValidationTracks();
@@ -390,11 +386,30 @@ function setDeliveryFlowStatus(message, kind) {
   if (kind) el.classList.add(kind);
 }
 
-async function loadProjectPolicies() {
+// Fetches the raw lists the delivery-flow selection UI needs (policies, tracks,
+// agent profiles, quality skills) and refreshes only that UI — unlike
+// loadValidationTracks/loadAgentProfiles/loadQualitySkills, this never touches
+// the Trilhas/Profiles/Skills tabs' own editor forms, so switching to the
+// Deliveries tab can't clobber an in-progress edit there.
+async function loadDeliveryFlowLists() {
   try {
-    projectPolicies = await window.api.listProjectPolicies();
+    const [policies, tracks, profiles, skills] = await Promise.all([
+      window.api.listProjectPolicies(),
+      window.api.listValidationTracks(),
+      window.api.listAgentProfiles(),
+      window.api.listQualitySkills()
+    ]);
+    projectPolicies = policies;
+    validationTracks = tracks;
+    agentProfiles = profiles;
+    qualitySkills = skills;
+    const delivery = deliveries.find((item) => item.id === editingDeliveryId);
+    renderDeliveryPolicyList();
+    renderDeliveryTrackSelect(delivery?.flowSnapshot?.track?.id || '');
+    renderDeliveryAgentProfileList();
+    renderDeliveryQualitySkillList();
   } catch (err) {
-    setDeliveryFlowStatus(`Erro ao carregar políticas: ${err.message}`, 'error');
+    setDeliveryFlowStatus(`Erro ao carregar dados do fluxo: ${err.message}`, 'error');
   }
 }
 
