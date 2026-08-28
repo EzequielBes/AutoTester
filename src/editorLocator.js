@@ -20,12 +20,14 @@ function findVSCodeExe({
     return null;
   }
 
+  const platformPath = path.win32;
+
   // `code` on PATH is a .cmd wrapper, and Windows can't CreateProcess a .cmd
   // directly without cmd.exe parsing. Locate the adjacent PE binary instead.
   try {
     const whereOut = execFileSync('where', ['code.cmd'], { encoding: 'utf8' }).trim().split(/\r?\n/)[0].trim();
     if (whereOut) {
-      const exePath = path.join(path.dirname(whereOut), '..', 'Code.exe');
+      const exePath = platformPath.join(platformPath.dirname(whereOut), '..', 'Code.exe');
       if (existsSync(exePath)) return exePath;
     }
   } catch {
@@ -33,7 +35,7 @@ function findVSCodeExe({
   }
 
   const candidates = [
-    env.LOCALAPPDATA && path.join(env.LOCALAPPDATA, 'Programs', 'Microsoft VS Code', 'Code.exe'),
+    env.LOCALAPPDATA && platformPath.join(env.LOCALAPPDATA, 'Programs', 'Microsoft VS Code', 'Code.exe'),
     'C:\\Program Files\\Microsoft VS Code\\Code.exe'
   ].filter(Boolean);
 

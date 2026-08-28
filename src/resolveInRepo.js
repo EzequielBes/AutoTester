@@ -7,6 +7,10 @@ const fs = require('node:fs');
 // guard against adversarial `finding.file` values from model output) is unit
 // testable without mocking Electron.
 function resolveInRepo(repoPath, relativePath) {
+  if (path.isAbsolute(relativePath) || path.win32.isAbsolute(relativePath)) {
+    throw new Error(`path escapes the repository: ${relativePath}`);
+  }
+
   const requestedRoot = path.resolve(repoPath);
   const root = fs.existsSync(requestedRoot) ? fs.realpathSync(requestedRoot) : requestedRoot;
   const absolutePath = path.resolve(root, relativePath);
