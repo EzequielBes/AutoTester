@@ -155,3 +155,63 @@ test('rejects a flowSnapshot that is not an object', () => {
 
   assert.throws(() => validateDelivery(invalid), /flowSnapshot must be an object/);
 });
+
+test('writes and reads back a delivery with a confirmed chain', () => {
+  const file = tmpFile();
+  const withChain = {
+    ...delivery(),
+    chain: { chainId: 'chain-1', position: 0, dependsOn: [], confirmedAt: '2026-08-28T12:00:00.000Z' }
+  };
+  writeDeliveries(file, [withChain]);
+  const [readBack] = readDeliveries(file);
+  assert.deepEqual(readBack.chain, withChain.chain);
+});
+
+test('accepts a null chain', () => {
+  const file = tmpFile();
+  writeDeliveries(file, [{ ...delivery(), chain: null }]);
+  const [readBack] = readDeliveries(file);
+  assert.equal(readBack.chain, null);
+});
+
+test('rejects a chain missing required fields', () => {
+  const file = tmpFile();
+  assert.throws(
+    () => writeDeliveries(file, [{ ...delivery(), chain: { chainId: 'c1' } }]),
+    /chain/
+  );
+});
+
+test('rejects a chain with a non-array dependsOn', () => {
+  const file = tmpFile();
+  assert.throws(
+    () => writeDeliveries(file, [{ ...delivery(), chain: { chainId: 'c1', position: 0, dependsOn: 'not-array', confirmedAt: '2026-08-28T12:00:00.000Z' } }]),
+    /dependsOn/
+  );
+});
+
+test('migrates a version 1 delivery to version 3 with both flowSnapshot and chain null', () => {
+  const file = tmpFile();
+  const v1Delivery = delivery();
+  delete v1Delivery.flowSnapshot;
+  fs.writeFileSync(file, JSON.stringify({ version: 1, deliveries: [v1Delivery] }));
+  const [migrated] = readDeliveries(file);
+  assert.equal(migrated.flowSnapshot, null);
+  assert.equal(migrated.chain, null);
+  assert.equal(migrated.id, v1Delivery.id);
+});
+
+test('migrates a version 2 delivery to version 3 with chain null, preserving flowSnapshot', () => {
+  const file = tmpFile();
+  const v2Delivery = { ...delivery(), flowSnapshot: { track: null, selectedPolicies: [], agentProfiles: [], qualitySkills: [] } };
+  fs.writeFileSync(file, JSON.stringify({ version: 2, deliveries: [v2Delivery] }));
+  const [migrated] = readDeliveries(file);
+  assert.equal(migrated.chain, null);
+  assert.deepEqual(migrated.flowSnapshot, v2Delivery.flowSnapshot);
+});
+
+test('writes deliveries at STORE_VERSION 3', () => {
+  const file = tmpFile();
+  writeDeliveries(file, [delivery()]);
+  assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).version, 3);
+});

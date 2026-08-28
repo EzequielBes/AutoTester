@@ -4,7 +4,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const STORE_VERSION = 2;
+const STORE_VERSION = 3;
 const MAX_TEXT_LENGTH = 2000;
 const DELIVERY_STATUSES = new Set([
   'draft', 'active', 'blocked', 'validating', 'ready-for-pr',
@@ -32,6 +32,19 @@ function validateFlowSnapshot(flowSnapshot) {
   }
 }
 
+function validateChain(chain) {
+  if (chain === null || chain === undefined) return;
+  if (typeof chain !== 'object' || Array.isArray(chain)) throw new Error('delivery.chain must be an object');
+  validateText(chain.chainId, 'chain.chainId', { required: true });
+  if (typeof chain.position !== 'number' || !Number.isInteger(chain.position) || chain.position < 0) {
+    throw new Error('chain.position must be a non-negative integer');
+  }
+  if (!Array.isArray(chain.dependsOn) || chain.dependsOn.some((id) => typeof id !== 'string' || id.length === 0)) {
+    throw new Error('chain.dependsOn must be an array of non-empty strings');
+  }
+  validateText(chain.confirmedAt, 'chain.confirmedAt', { required: true });
+}
+
 function validateDelivery(delivery) {
   if (!delivery || typeof delivery !== 'object' || Array.isArray(delivery)) {
     throw new Error('delivery must be an object');
@@ -50,6 +63,7 @@ function validateDelivery(delivery) {
   if (!Array.isArray(delivery.events)) throw new Error('delivery.events must be an array');
   delivery.events.forEach(validateEvent);
   validateFlowSnapshot(delivery.flowSnapshot);
+  validateChain(delivery.chain);
 }
 
 function validateDeliveries(deliveries) {
@@ -63,7 +77,11 @@ function validateDeliveries(deliveries) {
 }
 
 function migrateV1Delivery(delivery) {
-  return { ...delivery, flowSnapshot: null };
+  return { ...delivery, flowSnapshot: null, chain: null };
+}
+
+function migrateV2Delivery(delivery) {
+  return { ...delivery, chain: null };
 }
 
 function readDeliveries(filePath) {
@@ -77,9 +95,16 @@ function readDeliveries(filePath) {
   if (!data || !Array.isArray(data.deliveries)) {
     throw new Error('delivery storage has an unsupported schema');
   }
-  const deliveries = data.version === 1
-    ? data.deliveries.map(migrateV1Delivery)
-    : data.version === STORE_VERSION ? data.deliveries : null;
+  let deliveries;
+  if (data.version === 1) {
+    deliveries = data.deliveries.map(migrateV1Delivery);
+  } else if (data.version === 2) {
+    deliveries = data.deliveries.map(migrateV2Delivery);
+  } else if (data.version === STORE_VERSION) {
+    deliveries = data.deliveries;
+  } else {
+    deliveries = null;
+  }
   if (!deliveries) throw new Error('delivery storage has an unsupported schema');
   validateDeliveries(deliveries);
   return deliveries;
