@@ -145,7 +145,7 @@ loadValidationTracks();
 loadAgentProfiles();
 loadQualitySkills();
 renderDeliveryEditor(null);
-loadDeliveries();
+switchTab('deliveries');
 
 // --- Tabs ---
 
