@@ -4,7 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { EventEmitter } = require('node:events');
 const { PassThrough } = require('node:stream');
-const { runAzureSync } = require('../src/azureConnector');
+const { runAzureSync, suggestChain } = require('../src/azureConnector');
 
 function fakeChild() {
   const child = new EventEmitter();
@@ -77,4 +77,26 @@ test('rejects with AZURE_MCP_OUTPUT_TOO_LARGE when stdout exceeds the limit', as
   const promise = runAzureSync('sync prompt', { spawnImpl, terminate: () => child.emit('close', null) });
   child.stdout.emit('data', 'x'.repeat(3 * 1024 * 1024));
   await assert.rejects(promise, (error) => error.code === 'AZURE_MCP_OUTPUT_TOO_LARGE');
+});
+
+test('suggestChain resolves a chain suggestion from the CLI output', async () => {
+  const child = fakeChild();
+  const spawnImpl = () => child;
+  const promise = suggestChain(['delivery-1', 'delivery-2'], { spawnImpl });
+  child.stdout.emit('data', JSON.stringify({
+    result: JSON.stringify({ suggestion: [{ deliveryId: 'delivery-1', position: 0, dependsOn: [] }, { deliveryId: 'delivery-2', position: 1, dependsOn: ['delivery-1'] }], evidence: 'inferred from Git' })
+  }));
+  child.emit('close', 0);
+  const result = await promise;
+  assert.equal(result.suggestion.length, 2);
+  assert.equal(result.evidence, 'inferred from Git');
+});
+
+test('suggestChain rejects with AZURE_MCP_INVALID_ENVELOPE on a malformed suggestion', async () => {
+  const child = fakeChild();
+  const spawnImpl = () => child;
+  const promise = suggestChain(['delivery-1'], { spawnImpl });
+  child.stdout.emit('data', JSON.stringify({ result: JSON.stringify({ suggestion: 'not-an-array' }) }));
+  child.emit('close', 0);
+  await assert.rejects(promise, (error) => error.code === 'AZURE_MCP_INVALID_ENVELOPE');
 });

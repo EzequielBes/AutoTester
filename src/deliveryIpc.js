@@ -46,13 +46,23 @@ function buildFlowSnapshot(selection = {}, records) {
   });
 }
 
+function appendEvent(delivery, { kind, detail }) {
+  return {
+    ...delivery,
+    events: [...delivery.events, { id: crypto.randomUUID(), timestamp: new Date().toISOString(), kind, detail }]
+  };
+}
+
 function registerDeliveryIpc(ipcMain, {
   deliveriesFilePath,
   projectPoliciesFilePath,
   validationTracksFilePath,
   agentProfilesFilePath,
   qualitySkillsFilePath,
-  assertTrustedRenderer
+  assertTrustedRenderer,
+  runAzureSync,
+  suggestChainImpl,
+  detectInconsistencies
 }) {
   ipcMain.handle('deliveries:list', (event) => {
     assertTrustedRenderer(event);
@@ -89,6 +99,50 @@ function registerDeliveryIpc(ipcMain, {
     const delivery = { ...existing, flowSnapshot };
     return writeDeliveries(deliveriesFilePath(), deliveries.map((item) => item.id === existing.id ? delivery : item))
       .find((item) => item.id === delivery.id);
+  });
+
+  ipcMain.handle('deliveries:sync-azure', async (event, deliveryId) => {
+    assertTrustedRenderer(event);
+    const deliveries = readDeliveries(deliveriesFilePath());
+    const existing = deliveries.find((item) => item.id === deliveryId);
+    if (!existing) throw new Error('delivery was not found');
+
+    let updated = existing;
+    try {
+      const envelope = await runAzureSync(`Fetch Azure DevOps metadata for repository at branch "${existing.branch}".`);
+      const inconsistencies = detectInconsistencies(existing, { azureEnvelope: envelope, allDeliveries: deliveries });
+      inconsistencies.forEach((item) => {
+        updated = appendEvent(updated, { kind: 'inconsistency', detail: `${item.evidence} — ${item.recommendedAction}` });
+      });
+    } catch (error) {
+      updated = appendEvent(updated, { kind: 'inconsistency', detail: `Azure sync failed: ${error.message}` });
+    }
+
+    if (updated === existing) return existing;
+    return writeDeliveries(deliveriesFilePath(), deliveries.map((item) => item.id === existing.id ? updated : item))
+      .find((item) => item.id === existing.id);
+  });
+
+  ipcMain.handle('deliveries:suggest-chain', async (event, deliveryIds) => {
+    assertTrustedRenderer(event);
+    return suggestChainImpl(Array.isArray(deliveryIds) ? deliveryIds : []);
+  });
+
+  ipcMain.handle('deliveries:confirm-chain', (event, entries) => {
+    assertTrustedRenderer(event);
+    if (!Array.isArray(entries)) throw new Error('chain entries must be an array');
+    const deliveries = readDeliveries(deliveriesFilePath());
+    const confirmedAt = new Date().toISOString();
+    const byId = new Map(entries.map((entry) => [entry.deliveryId, entry]));
+    const next = deliveries.map((delivery) => {
+      const entry = byId.get(delivery.id);
+      if (!entry) return delivery;
+      return {
+        ...delivery,
+        chain: { chainId: entry.chainId, position: entry.position, dependsOn: entry.dependsOn || [], confirmedAt }
+      };
+    });
+    return writeDeliveries(deliveriesFilePath(), next).filter((item) => byId.has(item.id));
   });
 }
 

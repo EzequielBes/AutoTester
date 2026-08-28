@@ -8,7 +8,7 @@ const DEFAULT_AZURE_TIMEOUT_MS = 120000;
 const MAX_AZURE_STDOUT_CHARS = 2 * 1024 * 1024;
 const MAX_AZURE_STDERR_CHARS = MAX_LOG_CHARS;
 
-function parseCliOutput(stdout) {
+function unwrapCliResult(stdout) {
   let outer;
   try {
     outer = JSON.parse(stdout);
@@ -22,14 +22,17 @@ function parseCliOutput(stdout) {
     error.code = 'AZURE_MCP_INVALID_ENVELOPE';
     throw error;
   }
-  let parsed;
   try {
-    parsed = JSON.parse(outer.result);
+    return JSON.parse(outer.result);
   } catch {
     const error = new Error('Azure CLI "result" field is not valid JSON');
     error.code = 'AZURE_MCP_INVALID_ENVELOPE';
     throw error;
   }
+}
+
+function parseCliOutput(stdout) {
+  const parsed = unwrapCliResult(stdout);
   const { valid, errors } = validateAzureEnvelope(parsed);
   if (!valid) {
     const error = new Error(`Azure envelope does not match schema: ${errors.join('; ')}`);
@@ -39,12 +42,41 @@ function parseCliOutput(stdout) {
   return parsed;
 }
 
-function runAzureSync(prompt, {
+function validateChainSuggestion(parsed) {
+  const errors = [];
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return { valid: false, errors: ['root value must be an object'] };
+  }
+  if (!Array.isArray(parsed.suggestion)) {
+    errors.push('suggestion must be an array');
+  } else {
+    parsed.suggestion.forEach((entry, index) => {
+      if (typeof entry !== 'object' || entry === null) { errors.push(`suggestion[${index}] must be an object`); return; }
+      if (typeof entry.deliveryId !== 'string' || entry.deliveryId.length === 0) errors.push(`suggestion[${index}].deliveryId must be a non-empty string`);
+      if (typeof entry.position !== 'number' || !Number.isInteger(entry.position)) errors.push(`suggestion[${index}].position must be an integer`);
+      if (!Array.isArray(entry.dependsOn) || entry.dependsOn.some((id) => typeof id !== 'string')) errors.push(`suggestion[${index}].dependsOn must be an array of strings`);
+    });
+  }
+  if (typeof parsed.evidence !== 'string') errors.push('evidence must be a string');
+  return { valid: errors.length === 0, errors };
+}
+
+function parseChainSuggestion(outer) {
+  const { valid, errors } = validateChainSuggestion(outer);
+  if (!valid) {
+    const error = new Error(`Chain suggestion does not match schema: ${errors.join('; ')}`);
+    error.code = 'AZURE_MCP_INVALID_ENVELOPE';
+    throw error;
+  }
+  return outer;
+}
+
+function spawnClaudeJson(prompt, {
   timeoutMs = DEFAULT_AZURE_TIMEOUT_MS,
   signal,
   spawnImpl = spawn,
   terminate = terminateProcessTree
-} = {}) {
+} = {}, parseResult) {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) {
       const error = new Error('Azure sync cancelled');
@@ -124,8 +156,8 @@ function runAzureSync(prompt, {
         finish(() => reject(error));
       } else {
         try {
-          const envelope = parseCliOutput(stdout);
-          finish(() => resolve(envelope));
+          const result = parseResult(stdout);
+          finish(() => resolve(result));
         } catch (error) {
           finish(() => reject(error));
         }
@@ -134,4 +166,13 @@ function runAzureSync(prompt, {
   });
 }
 
-module.exports = { DEFAULT_AZURE_TIMEOUT_MS, MAX_AZURE_STDOUT_CHARS, MAX_AZURE_STDERR_CHARS, parseCliOutput, runAzureSync };
+function runAzureSync(prompt, options = {}) {
+  return spawnClaudeJson(prompt, options, parseCliOutput);
+}
+
+function suggestChain(deliveryIds, options = {}) {
+  const prompt = `Suggest an approval order (a Delivery Chain) for these deliveries, using Git and Azure DevOps context where available. Delivery ids: ${deliveryIds.join(', ')}. Respond with a JSON object: { "suggestion": [{ "deliveryId": string, "position": number, "dependsOn": string[] }], "evidence": string }.`;
+  return spawnClaudeJson(prompt, options, (stdout) => parseChainSuggestion(unwrapCliResult(stdout)));
+}
+
+module.exports = { DEFAULT_AZURE_TIMEOUT_MS, MAX_AZURE_STDOUT_CHARS, MAX_AZURE_STDERR_CHARS, parseCliOutput, runAzureSync, suggestChain };

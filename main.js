@@ -31,6 +31,8 @@ const { readDelivery } = require('./src/deliveryStore');
 const { filterFiles } = require('./src/fileScope');
 const { registerHistoryIpc } = require('./src/historyIpc');
 const { registerDeliveryIpc } = require('./src/deliveryIpc');
+const { runAzureSync, suggestChain } = require('./src/azureConnector');
+const { detectInconsistencies } = require('./src/deliveryInconsistencyDetector');
 const { readHistorySettings, writeHistorySettings } = require('./src/historySettingsStore');
 const { DEFAULT_AGENT_PROFILE, readAgentProfiles, writeAgentProfiles, validateProfile } = require('./src/agentProfileStore');
 const { DEFAULT_QUALITY_SKILLS, readQualitySkills, writeQualitySkills, validateSkill } = require('./src/qualitySkillStore');
@@ -131,7 +133,10 @@ registerDeliveryIpc(ipcMain, {
   validationTracksFilePath,
   agentProfilesFilePath,
   qualitySkillsFilePath,
-  assertTrustedRenderer
+  assertTrustedRenderer,
+  runAzureSync,
+  suggestChainImpl: suggestChain,
+  detectInconsistencies
 });
 
 function createReviewSnapshot(repoPath, branch, files) {

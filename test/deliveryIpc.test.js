@@ -60,7 +60,10 @@ function setup(options = {}) {
     validationTracksFilePath: () => tracksPath,
     agentProfilesFilePath: () => profilesPath,
     qualitySkillsFilePath: () => skillsPath,
-    assertTrustedRenderer: options.assertTrustedRenderer || (() => {})
+    assertTrustedRenderer: options.assertTrustedRenderer || (() => {}),
+    runAzureSync: options.runAzureSync || (async () => ({})),
+    suggestChainImpl: options.suggestChainImpl || (async () => ({ suggestion: [], evidence: '' })),
+    detectInconsistencies: options.detectInconsistencies || (() => [])
   });
   return { handlers, deliveriesPath };
 }
@@ -219,4 +222,65 @@ test('rejects an unknown delivery id when building a flow snapshot', () => {
     deliveryId: 'missing',
     selection: {}
   }), /delivery was not found/);
+});
+
+test('deliveries:sync-azure records an inconsistency event when the Azure connector fails, without throwing', async () => {
+  const { handlers } = setup({
+    runAzureSync: async () => { const error = new Error('timed out'); error.code = 'AZURE_MCP_TIMEOUT'; throw error; }
+  });
+  const saved = handlers.get('deliveries:save')({ sender: {} }, draft());
+  const result = await handlers.get('deliveries:sync-azure')({ sender: {} }, saved.id);
+  assert.equal(result.id, saved.id);
+  assert.equal(result.events.length, 1);
+  assert.equal(result.events[0].kind, 'inconsistency');
+  assert.match(result.events[0].detail, /timed out|AZURE_MCP_TIMEOUT/);
+});
+
+test('deliveries:sync-azure records no inconsistency event on a clean, matching sync', async () => {
+  const { handlers } = setup({
+    runAzureSync: async () => ({
+      repository: 'org/repo', branch: draft().branch, pullRequest: { id: '1', title: 'PR', status: 'active', targetBranch: 'Dev', url: 'https://example.test/pr/1' },
+      reviewers: [], workItems: [], fetchedAt: '2026-08-28T12:00:00.000Z'
+    }),
+    detectInconsistencies: () => []
+  });
+  const saved = handlers.get('deliveries:save')({ sender: {} }, draft());
+  const result = await handlers.get('deliveries:sync-azure')({ sender: {} }, saved.id);
+  assert.equal(result.events.length, 0);
+});
+
+test('deliveries:sync-azure rejects when the delivery does not exist', async () => {
+  const { handlers } = setup({ runAzureSync: async () => ({}) });
+  await assert.rejects(handlers.get('deliveries:sync-azure')({ sender: {} }, 'missing-id'));
+});
+
+test('deliveries:suggest-chain returns a suggestion without persisting it', async () => {
+  const { handlers, deliveriesPath } = setup({
+    runAzureSync: async () => ({}),
+    suggestChainImpl: async () => ({ suggestion: [{ deliveryId: 'delivery-1', position: 0, dependsOn: [] }], evidence: 'inferred from Git history' })
+  });
+  const saved = handlers.get('deliveries:save')({ sender: {} }, draft());
+  const result = await handlers.get('deliveries:suggest-chain')({ sender: {} }, [saved.id]);
+  assert.equal(result.suggestion.length, 1);
+  assert.equal(result.evidence, 'inferred from Git history');
+  const [stored] = readDeliveries(deliveriesPath);
+  assert.ok(!stored.chain);
+});
+
+test('deliveries:confirm-chain persists chain entries onto their deliveries', () => {
+  const { handlers, deliveriesPath } = setup();
+  const saved = handlers.get('deliveries:save')({ sender: {} }, draft());
+  const result = handlers.get('deliveries:confirm-chain')({ sender: {} }, [
+    { deliveryId: saved.id, chainId: 'chain-1', position: 0, dependsOn: [] }
+  ]);
+  assert.equal(result[0].chain.chainId, 'chain-1');
+  assert.equal(result[0].chain.position, 0);
+  assert.ok(result[0].chain.confirmedAt);
+  const [stored] = readDeliveries(deliveriesPath);
+  assert.equal(stored.chain.chainId, 'chain-1');
+});
+
+test('deliveries:confirm-chain rejects an untrusted renderer', () => {
+  const { handlers } = setup({ assertTrustedRenderer: () => { throw new Error('untrusted renderer'); } });
+  assert.throws(() => handlers.get('deliveries:confirm-chain')({ sender: {} }, []), /untrusted renderer/);
 });
