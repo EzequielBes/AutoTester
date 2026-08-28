@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
-const { evaluateCoverageGate, runValidationTrack } = require('../src/validationRunner');
+const { evaluateCoverageGate, runValidationTrack, resolveDeliveryFlow } = require('../src/validationRunner');
 
 const promptFilePath = path.join(__dirname, '..', 'prompts', 'review-prompt.md');
 
@@ -318,60 +318,46 @@ function flowSnapshotDelivery(overrides = {}) {
   };
 }
 
-test('rejects delivery-linked execution when the repository does not match the delivery', async () => {
-  let ran = false;
-  await assert.rejects(
-    runValidationTrack({
+test('rejects delivery-linked execution when the repository does not match the delivery', () => {
+  assert.throws(
+    () => resolveDeliveryFlow({
       deliveryId: 'delivery-1',
       resolveDelivery: () => flowSnapshotDelivery(),
-      repoPath: '/work/other-repository',
-      branch: 'feature/x',
-      track: { phases: [{ id: 'security', type: 'claude', name: 'Security', agent: 'claude', skill: 'security', intensity: 'quick', criteria: '' }] },
-      content: '',
-      allowedFiles: [],
-      promptFilePath,
-      runReview: async () => { ran = true; return []; }
+      deliveryRepoPath: '/work/other-repository',
+      branch: 'feature/x'
     }),
     /repository|branch/
   );
-  assert.equal(ran, false);
 });
 
-test('rejects delivery-linked execution when the branch does not match the delivery', async () => {
-  let ran = false;
-  await assert.rejects(
-    runValidationTrack({
+test('rejects delivery-linked execution when the branch does not match the delivery', () => {
+  assert.throws(
+    () => resolveDeliveryFlow({
       deliveryId: 'delivery-1',
       resolveDelivery: () => flowSnapshotDelivery(),
-      repoPath: '/work/repository',
-      branch: 'feature/other',
-      track: { phases: [{ id: 'security', type: 'claude', name: 'Security', agent: 'claude', skill: 'security', intensity: 'quick', criteria: '' }] },
-      content: '',
-      allowedFiles: [],
-      promptFilePath,
-      runReview: async () => { ran = true; return []; }
+      deliveryRepoPath: '/work/repository',
+      branch: 'feature/other'
     }),
     /repository|branch/
   );
-  assert.equal(ran, false);
 });
 
-test('delivery-linked execution uses the saved snapshot, not live profiles or skills', async () => {
-  let prompt;
-  const liveAgentProfiles = [{ id: 'snapshot-agent', name: 'Mutated live agent', runtime: 'claude', instructions: 'MUTATED live instructions.' }];
-  const liveQualitySkills = [{ id: 'snapshot-skill', name: 'Mutated live skill', baseSkill: 'general', instructions: 'MUTATED live skill instructions.', canApply: false }];
-
-  const results = await runValidationTrack({
+test('delivery-linked execution resolves the saved snapshot, not live profiles or skills', async () => {
+  const flowSnapshot = resolveDeliveryFlow({
     deliveryId: 'delivery-1',
     resolveDelivery: () => flowSnapshotDelivery(),
-    repoPath: '/work/repository',
-    branch: 'feature/x',
-    // Live track/profiles/skills the caller would normally pass — must be ignored in favor of the snapshot.
-    track: { phases: [{ id: 'other', type: 'claude', name: 'Other', agent: 'claude', skill: 'security', intensity: 'quick', criteria: '' }] },
-    agentProfiles: liveAgentProfiles,
-    qualitySkills: liveQualitySkills,
+    deliveryRepoPath: '/work/repository',
+    branch: 'feature/x'
+  });
+
+  let prompt;
+  const results = await runValidationTrack({
+    track: flowSnapshot.track,
+    agentProfiles: flowSnapshot.agentProfiles,
+    qualitySkills: flowSnapshot.qualitySkills,
     content: '=== src/a.js ===\nconst value = 1;',
     allowedFiles: ['src/a.js'],
+    repoPath: '/work/repository',
     promptFilePath,
     runReview: async (systemPrompt) => {
       prompt = systemPrompt;
@@ -385,47 +371,35 @@ test('delivery-linked execution uses the saved snapshot, not live profiles or sk
   assert.equal(results[0].skillName, 'Snapshot skill');
   assert.match(prompt, /Snapshot instructions\./);
   assert.match(prompt, /Snapshot skill instructions\./);
-  assert.doesNotMatch(prompt, /MUTATED/);
 });
 
-test('rejects delivery-linked execution when the delivery has no saved flow snapshot', async () => {
-  await assert.rejects(
-    runValidationTrack({
+test('rejects delivery-linked execution when the delivery has no saved flow snapshot', () => {
+  assert.throws(
+    () => resolveDeliveryFlow({
       deliveryId: 'delivery-1',
       resolveDelivery: () => flowSnapshotDelivery({ flowSnapshot: null }),
-      repoPath: '/work/repository',
-      branch: 'feature/x',
-      track: { phases: [] },
-      content: '',
-      allowedFiles: [],
-      promptFilePath,
-      runReview: async () => []
+      deliveryRepoPath: '/work/repository',
+      branch: 'feature/x'
     }),
     /flow snapshot|snapshot/
   );
 });
 
-test('rejects delivery-linked execution when the delivery cannot be found', async () => {
-  await assert.rejects(
-    runValidationTrack({
+test('rejects delivery-linked execution when the delivery cannot be found', () => {
+  assert.throws(
+    () => resolveDeliveryFlow({
       deliveryId: 'missing-delivery',
       resolveDelivery: () => null,
-      repoPath: '/work/repository',
-      branch: 'feature/x',
-      track: { phases: [] },
-      content: '',
-      allowedFiles: [],
-      promptFilePath,
-      runReview: async () => []
+      deliveryRepoPath: '/work/repository',
+      branch: 'feature/x'
     }),
     /delivery/
   );
 });
 
-test('rejects delivery-linked execution cleanly when the flow snapshot has no track selected', async () => {
-  let ran = false;
-  await assert.rejects(
-    runValidationTrack({
+test('rejects delivery-linked execution cleanly when the flow snapshot has no track selected', () => {
+  assert.throws(
+    () => resolveDeliveryFlow({
       deliveryId: 'delivery-1',
       resolveDelivery: () => flowSnapshotDelivery({
         flowSnapshot: {
@@ -434,23 +408,16 @@ test('rejects delivery-linked execution cleanly when the flow snapshot has no tr
           qualitySkills: []
         }
       }),
-      repoPath: '/work/repository',
-      branch: 'feature/x',
-      track: { phases: [{ id: 'security', type: 'claude', name: 'Security', agent: 'claude', skill: 'security', intensity: 'quick', criteria: '' }] },
-      content: '',
-      allowedFiles: [],
-      promptFilePath,
-      runReview: async () => { ran = true; return []; }
+      deliveryRepoPath: '/work/repository',
+      branch: 'feature/x'
     }),
     (error) => error instanceof Error && !(error instanceof TypeError) && /no track selected/.test(error.message)
   );
-  assert.equal(ran, false);
 });
 
-test('rejects delivery-linked execution when the snapshot track references an agent or skill excluded from the snapshot', async () => {
-  let ran = false;
-  await assert.rejects(
-    runValidationTrack({
+test('rejects delivery-linked execution when the snapshot track references an agent or skill excluded from the snapshot', () => {
+  assert.throws(
+    () => resolveDeliveryFlow({
       deliveryId: 'delivery-1',
       resolveDelivery: () => flowSnapshotDelivery({
         flowSnapshot: {
@@ -464,15 +431,43 @@ test('rejects delivery-linked execution when the snapshot track references an ag
           qualitySkills: [{ id: 'snapshot-skill', name: 'Snapshot skill', baseSkill: 'general', instructions: 'Snapshot skill instructions.', canApply: false }]
         }
       }),
-      repoPath: '/work/repository',
-      branch: 'feature/x',
-      track: { phases: [] },
-      content: '',
-      allowedFiles: [],
-      promptFilePath,
-      runReview: async () => { ran = true; return []; }
+      deliveryRepoPath: '/work/repository',
+      branch: 'feature/x'
     }),
     /agent profile/
   );
-  assert.equal(ran, false);
+});
+
+test('rejects a flow snapshot cleanly when the track has no phases array', () => {
+  assert.throws(
+    () => resolveDeliveryFlow({
+      deliveryId: 'delivery-1',
+      resolveDelivery: () => flowSnapshotDelivery({
+        flowSnapshot: {
+          track: { id: 't' },
+          agentProfiles: [],
+          qualitySkills: []
+        }
+      }),
+      deliveryRepoPath: '/work/repository',
+      branch: 'feature/x'
+    }),
+    (error) => error instanceof Error && !(error instanceof TypeError) && /malformed/.test(error.message)
+  );
+});
+
+test('rejects a flow snapshot cleanly when agentProfiles or qualitySkills are missing', () => {
+  assert.throws(
+    () => resolveDeliveryFlow({
+      deliveryId: 'delivery-1',
+      resolveDelivery: () => flowSnapshotDelivery({
+        flowSnapshot: {
+          track: { id: 't', phases: [{ id: 'security', type: 'claude', name: 'Security', agent: 'a', skill: 's', intensity: 'quick', criteria: '' }] }
+        }
+      }),
+      deliveryRepoPath: '/work/repository',
+      branch: 'feature/x'
+    }),
+    (error) => error instanceof Error && !(error instanceof TypeError) && /malformed/.test(error.message)
+  );
 });

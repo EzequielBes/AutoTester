@@ -153,14 +153,17 @@ async function runCommandPhase(phase, { repoPath, allowedFiles, coverageBaseline
   return result;
 }
 
-function assertFlowSnapshotReferences(track, agentProfiles, qualitySkills) {
+function assertTrackReferences(track, agentProfiles, qualitySkills, subject = 'track') {
+  if (!Array.isArray(track?.phases) || !Array.isArray(agentProfiles) || !Array.isArray(qualitySkills)) {
+    throw new Error(`${subject} is malformed`);
+  }
   track.phases.filter((phase) => phase.type === 'claude').forEach((phase) => {
     const profile = agentProfiles.find((item) => item.id === phase.agent);
     if (!profile || profile.runtime !== 'claude') {
-      throw new Error(`delivery flow snapshot is missing the agent profile for phase "${phase.name}"`);
+      throw new Error(`${subject} is missing the agent profile for phase "${phase.name}"`);
     }
     if (!qualitySkills.some((skill) => skill.id === phase.skill)) {
-      throw new Error(`delivery flow snapshot is missing the quality skill for phase "${phase.name}"`);
+      throw new Error(`${subject} is missing the quality skill for phase "${phase.name}"`);
     }
   });
 }
@@ -173,7 +176,7 @@ function resolveDeliveryFlow({ deliveryId, resolveDelivery, deliveryRepoPath, br
   }
   if (!delivery.flowSnapshot) throw new Error('delivery does not have a saved flow snapshot');
   if (!delivery.flowSnapshot.track) throw new Error('delivery has no track selected in its flow snapshot');
-  assertFlowSnapshotReferences(delivery.flowSnapshot.track, delivery.flowSnapshot.agentProfiles, delivery.flowSnapshot.qualitySkills);
+  assertTrackReferences(delivery.flowSnapshot.track, delivery.flowSnapshot.agentProfiles, delivery.flowSnapshot.qualitySkills, 'delivery flow snapshot');
   return delivery.flowSnapshot;
 }
 
@@ -182,10 +185,6 @@ async function runValidationTrack({
   content,
   allowedFiles,
   repoPath,
-  deliveryRepoPath = repoPath,
-  branch,
-  deliveryId,
-  resolveDelivery,
   agentProfiles = [{ id: 'claude', name: 'Claude padrão', runtime: 'claude', instructions: '' }],
   qualitySkills = DEFAULT_QUALITY_SKILLS,
   promptFilePath,
@@ -197,12 +196,6 @@ async function runValidationTrack({
   signal,
   onPhaseProgress
 }) {
-  if (deliveryId) {
-    const flowSnapshot = resolveDeliveryFlow({ deliveryId, resolveDelivery, deliveryRepoPath, branch });
-    track = flowSnapshot.track;
-    agentProfiles = flowSnapshot.agentProfiles;
-    qualitySkills = flowSnapshot.qualitySkills;
-  }
   const results = [];
   let index = 0;
   const claudeOptions = { content, allowedFiles, promptFilePath, agentProfiles, qualitySkills, runReview, signal, onPhaseProgress };
@@ -251,4 +244,4 @@ async function runValidationTrack({
   return results;
 }
 
-module.exports = { MAX_CLAUDE_CONCURRENCY, readCoverageFileState, coverageFileChanged, runClaudePhase, runClaudeBatch, runCommandPhase, evaluateCoverageGate, resolveDeliveryFlow, runValidationTrack };
+module.exports = { MAX_CLAUDE_CONCURRENCY, readCoverageFileState, coverageFileChanged, runClaudePhase, runClaudeBatch, runCommandPhase, evaluateCoverageGate, assertTrackReferences, resolveDeliveryFlow, runValidationTrack };

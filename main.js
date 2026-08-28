@@ -24,7 +24,7 @@ const { resolveInRepo } = require('./src/resolveInRepo');
 const { findVSCodeExe } = require('./src/editorLocator');
 const { validateFindings } = require('./src/findingsSchema');
 const { readValidationTracks, writeValidationTracks, validateTrack } = require('./src/validationTrackStore');
-const { runValidationTrack, resolveDeliveryFlow } = require('./src/validationRunner');
+const { runValidationTrack, resolveDeliveryFlow, assertTrackReferences } = require('./src/validationRunner');
 const { readProjectPolicies, writeProjectPolicies } = require('./src/projectPolicyStore');
 const { discoverRepositoryRules } = require('./src/repositoryRuleDiscovery');
 const { readDelivery } = require('./src/deliveryStore');
@@ -182,18 +182,6 @@ function registerReviewRun({ repoPath, branch, files, snapshot, skill, metadata 
     ...metadata
   });
   return { historyId, applyRunId };
-}
-
-function assertTrackReferences(track, agentProfiles, qualitySkills) {
-  track.phases.filter((phase) => phase.type === 'claude').forEach((phase) => {
-    const profile = agentProfiles.find((item) => item.id === phase.agent);
-    if (!profile || profile.runtime !== 'claude') {
-      throw new Error(`agent profile is not available for phase "${phase.name}"`);
-    }
-    if (!qualitySkills.some((skill) => skill.id === phase.skill)) {
-      throw new Error(`quality skill is not available for phase "${phase.name}"`);
-    }
-  });
 }
 
 function buildAgentProfileFromDraft(draft, existing) {

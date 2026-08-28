@@ -552,7 +552,7 @@ function renderFlowSnapshotSummary(flowSnapshot) {
   trackLine.textContent = flowSnapshot.track ? `Trilha do snapshot: ${flowSnapshot.track.name}` : 'Snapshot sem trilha selecionada.';
   summary.appendChild(trackLine);
   const counts = document.createElement('p');
-  counts.textContent = `${flowSnapshot.selectedPolicies.length} política(s), ${flowSnapshot.agentProfiles.length} perfil(is), ${flowSnapshot.qualitySkills.length} skill(s).`;
+  counts.textContent = `${(flowSnapshot.selectedPolicies || []).length} política(s), ${(flowSnapshot.agentProfiles || []).length} perfil(is), ${(flowSnapshot.qualitySkills || []).length} skill(s).`;
   summary.appendChild(counts);
   container.appendChild(summary);
 }
