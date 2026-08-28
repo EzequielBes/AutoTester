@@ -92,6 +92,29 @@ test('suggestChain resolves a chain suggestion from the CLI output', async () =>
   assert.equal(result.evidence, 'inferred from Git');
 });
 
+test('passes cwd through to the spawned claude process when supplied', async () => {
+  const child = fakeChild();
+  let receivedOptions;
+  const spawnImpl = (command, args, options) => { receivedOptions = options; return child; };
+  const promise = runAzureSync('sync prompt', { spawnImpl, cwd: '/work/repository' });
+  child.stdout.emit('data', envelopeJson());
+  child.emit('close', 0);
+  await promise;
+  assert.equal(receivedOptions.cwd, '/work/repository');
+  assert.equal(receivedOptions.windowsHide, true);
+});
+
+test('omits cwd (defaults to current directory) when not supplied', async () => {
+  const child = fakeChild();
+  let receivedOptions;
+  const spawnImpl = (command, args, options) => { receivedOptions = options; return child; };
+  const promise = runAzureSync('sync prompt', { spawnImpl });
+  child.stdout.emit('data', envelopeJson());
+  child.emit('close', 0);
+  await promise;
+  assert.equal(receivedOptions.cwd, undefined);
+});
+
 test('suggestChain rejects with AZURE_MCP_INVALID_ENVELOPE on a malformed suggestion', async () => {
   const child = fakeChild();
   const spawnImpl = () => child;

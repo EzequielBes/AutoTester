@@ -75,7 +75,8 @@ function spawnClaudeJson(prompt, {
   timeoutMs = DEFAULT_AZURE_TIMEOUT_MS,
   signal,
   spawnImpl = spawn,
-  terminate = terminateProcessTree
+  terminate = terminateProcessTree,
+  cwd
 } = {}, parseResult) {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) {
@@ -116,7 +117,7 @@ function spawnClaudeJson(prompt, {
         '-p',
         '--output-format', 'json',
         '--append-system-prompt', prompt
-      ], { windowsHide: true });
+      ], { windowsHide: true, cwd });
     } catch (error) {
       error.code = 'AZURE_MCP_SPAWN_ERROR';
       finish(() => reject(error));

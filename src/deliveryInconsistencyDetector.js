@@ -5,6 +5,16 @@ function detectInconsistencies(delivery, { azureEnvelope = null, allDeliveries =
   const detectedAt = now();
 
   if (azureEnvelope) {
+    const repoDirName = String(delivery.repoPath || '').split(/[\\/]/).filter(Boolean).pop() || '';
+    const azureRepoName = String(azureEnvelope.repository || '').split('/').filter(Boolean).pop() || '';
+    if (repoDirName && azureRepoName && repoDirName.toLowerCase() !== azureRepoName.toLowerCase()) {
+      inconsistencies.push({
+        severity: 'high',
+        evidence: `delivery repository "${delivery.repoPath}" does not match the Azure repository "${azureEnvelope.repository}"`,
+        recommendedAction: 'confirm the Azure sync is targeting the correct repository',
+        detectedAt
+      });
+    }
     if (azureEnvelope.branch !== delivery.branch) {
       inconsistencies.push({
         severity: 'high',

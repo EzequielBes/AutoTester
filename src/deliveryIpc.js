@@ -27,7 +27,9 @@ function buildDeliveryFromDraft(draft, existing) {
     blockedReason: draft.blockedReason,
     createdAt: existing ? existing.createdAt : now.toISOString(),
     updatedAt,
-    events: existing ? existing.events : []
+    events: existing ? existing.events : [],
+    flowSnapshot: existing ? existing.flowSnapshot : null,
+    chain: existing ? existing.chain : null
   };
 }
 
@@ -109,7 +111,10 @@ function registerDeliveryIpc(ipcMain, {
 
     let updated = existing;
     try {
-      const envelope = await runAzureSync(`Fetch Azure DevOps metadata for repository at branch "${existing.branch}".`);
+      const envelope = await runAzureSync(
+        `Fetch Azure DevOps metadata for the repository at "${existing.repoPath}", branch "${existing.branch}".`,
+        { cwd: existing.repoPath }
+      );
       const inconsistencies = detectInconsistencies(existing, { azureEnvelope: envelope, allDeliveries: deliveries });
       inconsistencies.forEach((item) => {
         updated = appendEvent(updated, { kind: 'inconsistency', detail: `${item.evidence} — ${item.recommendedAction}` });

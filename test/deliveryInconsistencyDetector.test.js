@@ -104,6 +104,24 @@ test('flags a dependsOn id that references a delivery not present in allDeliveri
   assert.equal(result[0].severity, 'medium');
 });
 
+test('does not flag a repository mismatch when the repo dir name matches the Azure repository name', () => {
+  const result = detectInconsistencies(
+    delivery({ repoPath: '/home/user/projects/billing-service', branch: 'feature/x' }),
+    { azureEnvelope: envelope({ repository: 'org/billing-service' }), now }
+  );
+  assert.ok(!result.some((item) => /repository/i.test(item.evidence)));
+});
+
+test('flags a repository mismatch when the Azure repository is unrelated to the delivery repo', () => {
+  const result = detectInconsistencies(
+    delivery({ repoPath: '/home/user/projects/billing-service', branch: 'feature/x' }),
+    { azureEnvelope: envelope({ repository: 'org/totally-unrelated-repo' }), now }
+  );
+  const mismatch = result.find((item) => /repository/i.test(item.evidence));
+  assert.ok(mismatch, 'expected a repository mismatch inconsistency');
+  assert.equal(mismatch.severity, 'high');
+});
+
 test('each inconsistency includes a recommendedAction string', () => {
   const result = detectInconsistencies(delivery({ branch: 'feature/other' }), { azureEnvelope: envelope(), now });
   result.forEach((item) => assert.ok(typeof item.recommendedAction === 'string' && item.recommendedAction.length > 0));

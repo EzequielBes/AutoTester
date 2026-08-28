@@ -617,7 +617,8 @@ async function syncAzure() {
   try {
     const updated = await window.api.syncAzure(editingDeliveryId);
     deliveries = deliveries.map((item) => item.id === updated.id ? updated : item);
-    renderInconsistencyList(updated);
+    renderDeliveryDetail(updated);
+    renderDeliveryList(deliveries);
     setSyncStatus('Sincronizado.');
   } catch (err) {
     setSyncStatus(`Erro ao sincronizar com o Azure: ${err.message}`, 'error');
@@ -632,6 +633,10 @@ async function suggestChain() {
   setSyncStatus('Sugerindo cadeia...', 'running');
   try {
     const result = await window.api.suggestChain([editingDeliveryId]);
+    if (!result.suggestion || result.suggestion.length === 0) {
+      setSyncStatus('Nenhuma cadeia sugerida para esta entrega.');
+      return;
+    }
     chainSuggestionState = result;
     const container = document.getElementById('delivery-chain-suggestion');
     const evidence = document.getElementById('chain-suggestion-evidence');
@@ -665,9 +670,9 @@ async function acceptChainSuggestion() {
       const match = updated.find((u) => u.id === item.id);
       return match || item;
     });
-    rejectChainSuggestion();
     const current = deliveries.find((item) => item.id === editingDeliveryId);
-    if (current) renderChainConfirmed(current);
+    if (current) renderDeliveryDetail(current);
+    renderDeliveryList(deliveries);
     setSyncStatus('Cadeia confirmada.');
   } catch (err) {
     setSyncStatus(`Erro ao confirmar cadeia: ${err.message}`, 'error');

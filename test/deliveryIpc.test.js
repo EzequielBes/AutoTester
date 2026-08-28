@@ -254,6 +254,20 @@ test('deliveries:sync-azure rejects when the delivery does not exist', async () 
   await assert.rejects(handlers.get('deliveries:sync-azure')({ sender: {} }, 'missing-id'));
 });
 
+test('deliveries:sync-azure runs the Azure query against the delivery\'s own repo path', async () => {
+  let receivedPrompt;
+  let receivedOptions;
+  const { handlers } = setup({
+    runAzureSync: async (prompt, options) => { receivedPrompt = prompt; receivedOptions = options; return {}; }
+  });
+  const saved = handlers.get('deliveries:save')({ sender: {} }, draft({ repoPath: '/work/repository' }));
+  await handlers.get('deliveries:sync-azure')({ sender: {} }, saved.id);
+
+  assert.equal(receivedOptions.cwd, '/work/repository');
+  assert.match(receivedPrompt, /\/work\/repository/);
+  assert.match(receivedPrompt, /feature\/delivery-ipc/);
+});
+
 test('deliveries:suggest-chain returns a suggestion without persisting it', async () => {
   const { handlers, deliveriesPath } = setup({
     runAzureSync: async () => ({}),
@@ -283,4 +297,41 @@ test('deliveries:confirm-chain persists chain entries onto their deliveries', ()
 test('deliveries:confirm-chain rejects an untrusted renderer', () => {
   const { handlers } = setup({ assertTrustedRenderer: () => { throw new Error('untrusted renderer'); } });
   assert.throws(() => handlers.get('deliveries:confirm-chain')({ sender: {} }, []), /untrusted renderer/);
+});
+
+test('deliveries:save preserves a confirmed chain and flow snapshot on a later edit', () => {
+  const { handlers, deliveriesPath } = setup({
+    policies: [{ id: 'policy-1', path: 'AGENTS.md', excerpt: 'Follow the rules.' }]
+  });
+  const saved = handlers.get('deliveries:save')({ sender: {} }, draft());
+
+  // Confirm a chain on the delivery.
+  const [confirmed] = handlers.get('deliveries:confirm-chain')({ sender: {} }, [
+    { deliveryId: saved.id, chainId: 'chain-1', position: 0, dependsOn: [] }
+  ]);
+  assert.equal(confirmed.chain.chainId, 'chain-1');
+
+  // Build a flow snapshot on the same delivery.
+  const withSnapshot = handlers.get('deliveries:build-flow-snapshot')({ sender: {} }, {
+    deliveryId: saved.id,
+    selection: { policyIds: ['policy-1'] }
+  });
+  assert.equal(withSnapshot.flowSnapshot.selectedPolicies.length, 1);
+  assert.equal(withSnapshot.chain.chainId, 'chain-1');
+
+  // Re-save the delivery with an edited field, as the editor form would.
+  const resaved = handlers.get('deliveries:save')({ sender: {} }, draft({
+    id: saved.id,
+    nextAction: 'A different next action.'
+  }));
+
+  assert.equal(resaved.nextAction, 'A different next action.');
+  assert.ok(resaved.chain, 'chain must survive a re-save');
+  assert.equal(resaved.chain.chainId, 'chain-1');
+  assert.ok(resaved.flowSnapshot, 'flowSnapshot must survive a re-save');
+  assert.equal(resaved.flowSnapshot.selectedPolicies.length, 1);
+
+  const [stored] = readDeliveries(deliveriesPath).filter((item) => item.id === saved.id);
+  assert.equal(stored.chain.chainId, 'chain-1');
+  assert.equal(stored.flowSnapshot.selectedPolicies.length, 1);
 });
