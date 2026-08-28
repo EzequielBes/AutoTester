@@ -6,6 +6,8 @@ Aplicação Electron local para organizar Entregas e validar qualidade de reposi
 
 - Seleção de branch, pastas, arquivos e filtros glob.
 - Entregas locais que preservam o contexto de feature, decisões, impedimentos, próximos passos e evidências de validação entre sessões.
+- Descoberta de regras de política em arquivos do repositório (AGENTS.md, CLAUDE.md, CONTEXT.md, CONTRIBUTING.md, templates de PR) e composição de Políticas de Projeto locais a partir delas.
+- Fluxo por Entrega: seleção de políticas, trilha, perfis de agente e skills, salvos como snapshot imutável e usado para execução de trilha vinculada à Entrega.
 - Trilhas com fases Claude ou comandos de teste, perfis de agente e skills editáveis.
 - Subagentes Claude paralelos, com limite de duas fases simultâneas.
 - Cobertura LCOV com mínimos, tolerância de queda e baseline local.

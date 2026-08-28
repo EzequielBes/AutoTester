@@ -55,6 +55,41 @@
             <label>Motivo do impedimento<textarea id="delivery-blocked-reason" maxlength="2000" placeholder="Registre um impedimento, se houver."></textarea></label>
             <div class="actions"><button type="submit" class="primary">Salvar entrega</button></div>
           </form>
+
+          <section class="delivery-flow-section" aria-labelledby="delivery-flow-title">
+            <h2 id="delivery-flow-title" class="panel-title">Fluxo</h2>
+            <p class="helper-text">Descubra regras no repositório da entrega, selecione políticas e trilha, e salve um snapshot do fluxo para execução vinculada.</p>
+
+            <div class="row">
+              <button type="button" id="discover-rules-btn">Descobrir regras no repositório</button>
+            </div>
+            <div id="discovered-rules-list" class="inset"></div>
+
+            <p class="panel-title" id="delivery-policy-list-label">Políticas do projeto</p>
+            <div id="delivery-policy-list" class="inset" role="group" aria-labelledby="delivery-policy-list-label"></div>
+
+            <label>Trilha de validação<select id="delivery-track-select"><option value="">Nenhuma trilha selecionada</option></select></label>
+
+            <div class="row">
+              <div class="grow">
+                <p class="panel-title" id="delivery-agent-profile-list-label">Perfis de agente</p>
+                <div id="delivery-agent-profile-list" class="inset" role="group" aria-labelledby="delivery-agent-profile-list-label"></div>
+              </div>
+              <div class="grow">
+                <p class="panel-title" id="delivery-quality-skill-list-label">Skills de qualidade</p>
+                <div id="delivery-quality-skill-list" class="inset" role="group" aria-labelledby="delivery-quality-skill-list-label"></div>
+              </div>
+            </div>
+
+            <div class="actions">
+              <button type="button" id="save-flow-snapshot-btn" class="primary">Salvar snapshot do fluxo</button>
+              <button type="button" id="run-delivery-track-btn">Executar trilha vinculada</button>
+            </div>
+
+            <div id="delivery-flow-status" class="status"></div>
+            <div id="delivery-flow-snapshot-summary"></div>
+          </section>
+
           <section class="delivery-timeline-section" aria-labelledby="delivery-timeline-title">
             <h2 id="delivery-timeline-title" class="panel-title">Linha do tempo</h2>
             <div id="delivery-timeline"></div>

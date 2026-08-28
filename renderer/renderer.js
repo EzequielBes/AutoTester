@@ -27,6 +27,11 @@ let activeTrackExecutionId = null;
 let livePhaseResults = new Map();
 let deliveries = [];
 let editingDeliveryId = null;
+let projectPolicies = [];
+let discoveredRules = [];
+let selectedPolicyIds = new Set();
+let selectedAgentProfileIds = new Set();
+let selectedQualitySkillIds = new Set();
 
 function invalidateReview() {
   if (activeTrackExecutionId) {
@@ -144,6 +149,7 @@ populateRecentRepos();
 loadValidationTracks();
 loadAgentProfiles();
 loadQualitySkills();
+loadProjectPolicies();
 renderDeliveryEditor(null);
 switchTab('deliveries');
 
@@ -182,7 +188,13 @@ function switchTab(name) {
     element.classList.toggle('active', active);
     element.setAttribute('aria-pressed', String(active));
   });
-  if (isDeliveries) loadDeliveries();
+  if (isDeliveries) {
+    loadDeliveries();
+    loadValidationTracks();
+    loadAgentProfiles();
+    loadQualitySkills();
+    loadProjectPolicies().then(() => renderDeliveryPolicyList());
+  }
   if (isTracks) {
     loadValidationTracks();
     loadAgentProfiles();
@@ -271,6 +283,17 @@ function renderDeliveryDetail(delivery) {
   updated.textContent = `Atualizada ${new Date(delivery.updatedAt).toLocaleString('pt-BR')}`;
   header.append(eyebrow, title, updated);
   renderDeliveryTimeline(delivery.events);
+  selectedPolicyIds = new Set((delivery.flowSnapshot?.selectedPolicies || []).map((item) => item.id));
+  selectedAgentProfileIds = new Set((delivery.flowSnapshot?.agentProfiles || []).map((item) => item.id));
+  selectedQualitySkillIds = new Set((delivery.flowSnapshot?.qualitySkills || []).map((item) => item.id));
+  discoveredRules = [];
+  renderDiscoveredRules();
+  renderDeliveryPolicyList();
+  renderDeliveryTrackSelect(delivery.flowSnapshot?.track?.id || '');
+  renderDeliveryAgentProfileList();
+  renderDeliveryQualitySkillList();
+  renderFlowSnapshotSummary(delivery.flowSnapshot);
+  document.getElementById('delivery-flow-status').textContent = '';
 }
 
 function renderDeliveryEditor(delivery) {
@@ -290,6 +313,17 @@ function renderDeliveryEditor(delivery) {
     title.textContent = 'Nova entrega';
     header.appendChild(title);
     renderDeliveryTimeline([]);
+    selectedPolicyIds = new Set();
+    selectedAgentProfileIds = new Set();
+    selectedQualitySkillIds = new Set();
+    discoveredRules = [];
+    renderDiscoveredRules();
+    renderDeliveryPolicyList();
+    renderDeliveryTrackSelect('');
+    renderDeliveryAgentProfileList();
+    renderDeliveryQualitySkillList();
+    renderFlowSnapshotSummary(null);
+    document.getElementById('delivery-flow-status').textContent = 'Salve a entrega antes de configurar o fluxo.';
   }
 }
 
@@ -346,6 +380,270 @@ async function saveDelivery(event) {
     setStatus(`Erro ao salvar entrega: ${err.message}`, 'error');
   }
 }
+
+// --- Delivery flow: policies, rules, track and snapshot ---
+
+function setDeliveryFlowStatus(message, kind) {
+  const el = document.getElementById('delivery-flow-status');
+  el.textContent = message;
+  el.classList.remove('running', 'error');
+  if (kind) el.classList.add(kind);
+}
+
+async function loadProjectPolicies() {
+  try {
+    projectPolicies = await window.api.listProjectPolicies();
+  } catch (err) {
+    setDeliveryFlowStatus(`Erro ao carregar políticas: ${err.message}`, 'error');
+  }
+}
+
+function renderDiscoveredRules() {
+  const list = document.getElementById('discovered-rules-list');
+  list.textContent = '';
+  if (discoveredRules.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'empty-state';
+    empty.textContent = 'Nenhuma regra descoberta ainda.';
+    list.appendChild(empty);
+    return;
+  }
+  discoveredRules.forEach((rule) => {
+    const row = document.createElement('div');
+    row.className = 'rule-row';
+    const body = document.createElement('div');
+    body.className = 'rule-row-body';
+    const path = document.createElement('strong');
+    path.className = 'technical-value';
+    path.textContent = rule.path;
+    const excerpt = document.createElement('pre');
+    excerpt.className = 'rule-excerpt';
+    excerpt.textContent = rule.excerpt;
+    body.append(path, excerpt);
+    const addBtn = document.createElement('button');
+    addBtn.type = 'button';
+    addBtn.textContent = 'Adicionar como política';
+    addBtn.addEventListener('click', () => addDiscoveredRuleAsPolicy(rule));
+    row.append(body, addBtn);
+    list.appendChild(row);
+  });
+}
+
+async function addDiscoveredRuleAsPolicy(rule) {
+  try {
+    const id = `${rule.path}#${crypto.randomUUID().slice(0, 8)}`;
+    const updated = await window.api.saveProjectPolicies([
+      ...projectPolicies,
+      { id, path: rule.path, excerpt: rule.excerpt }
+    ]);
+    projectPolicies = updated;
+    selectedPolicyIds.add(id);
+    renderDeliveryPolicyList();
+    setDeliveryFlowStatus(`Política "${id}" adicionada a partir de ${rule.path}.`);
+  } catch (err) {
+    setDeliveryFlowStatus(`Erro ao adicionar política: ${err.message}`, 'error');
+  }
+}
+
+function renderDeliveryPolicyList() {
+  const list = document.getElementById('delivery-policy-list');
+  list.textContent = '';
+  if (projectPolicies.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'empty-state';
+    empty.textContent = 'Nenhuma política salva ainda.';
+    list.appendChild(empty);
+    return;
+  }
+  projectPolicies.forEach((policy) => {
+    const row = document.createElement('label');
+    row.className = 'check-row';
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.checked = selectedPolicyIds.has(policy.id);
+    checkbox.addEventListener('change', () => {
+      if (checkbox.checked) selectedPolicyIds.add(policy.id); else selectedPolicyIds.delete(policy.id);
+    });
+    const body = document.createElement('div');
+    body.className = 'check-row-body';
+    const id = document.createElement('strong');
+    id.textContent = policy.id;
+    const path = document.createElement('span');
+    path.className = 'technical-value';
+    path.textContent = policy.path;
+    body.append(id, path);
+    row.append(checkbox, body);
+    list.appendChild(row);
+  });
+}
+
+function renderDeliveryTrackSelect(selectedTrackId) {
+  const select = document.getElementById('delivery-track-select');
+  select.innerHTML = '';
+  const none = document.createElement('option');
+  none.value = '';
+  none.textContent = 'Nenhuma trilha selecionada';
+  select.appendChild(none);
+  validationTracks.forEach((track) => {
+    const option = document.createElement('option');
+    option.value = track.id;
+    option.textContent = track.name;
+    select.appendChild(option);
+  });
+  select.value = validationTracks.some((track) => track.id === selectedTrackId) ? selectedTrackId : '';
+}
+
+function renderCheckboxList(containerId, items, selectedIds) {
+  const list = document.getElementById(containerId);
+  list.textContent = '';
+  if (items.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'empty-state';
+    empty.textContent = 'Nada disponível ainda.';
+    list.appendChild(empty);
+    return;
+  }
+  items.forEach((item) => {
+    const row = document.createElement('label');
+    row.className = 'check-row';
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.checked = selectedIds.has(item.id);
+    checkbox.addEventListener('change', () => {
+      if (checkbox.checked) selectedIds.add(item.id); else selectedIds.delete(item.id);
+    });
+    const name = document.createElement('span');
+    name.textContent = item.name;
+    row.append(checkbox, name);
+    list.appendChild(row);
+  });
+}
+
+function renderDeliveryAgentProfileList() {
+  renderCheckboxList('delivery-agent-profile-list', agentProfiles, selectedAgentProfileIds);
+}
+
+function renderDeliveryQualitySkillList() {
+  renderCheckboxList('delivery-quality-skill-list', qualitySkills, selectedQualitySkillIds);
+}
+
+function renderFlowSnapshotSummary(flowSnapshot) {
+  const container = document.getElementById('delivery-flow-snapshot-summary');
+  container.textContent = '';
+  if (!flowSnapshot) return;
+  const summary = document.createElement('div');
+  summary.className = 'flow-snapshot-summary';
+  const trackLine = document.createElement('p');
+  trackLine.textContent = flowSnapshot.track ? `Trilha do snapshot: ${flowSnapshot.track.name}` : 'Snapshot sem trilha selecionada.';
+  summary.appendChild(trackLine);
+  const counts = document.createElement('p');
+  counts.textContent = `${flowSnapshot.selectedPolicies.length} política(s), ${flowSnapshot.agentProfiles.length} perfil(is), ${flowSnapshot.qualitySkills.length} skill(s).`;
+  summary.appendChild(counts);
+  container.appendChild(summary);
+}
+
+document.getElementById('discover-rules-btn').addEventListener('click', async () => {
+  const repoPath = document.getElementById('delivery-repo-path').value.trim();
+  const branch = document.getElementById('delivery-branch').value.trim();
+  if (!repoPath || !branch) {
+    setDeliveryFlowStatus('Informe repositório e branch da entrega antes de descobrir regras.', 'error');
+    return;
+  }
+  setDeliveryFlowStatus('Descobrindo regras...', 'running');
+  try {
+    discoveredRules = await window.api.discoverRepositoryRules({ repoPath, branch });
+    renderDiscoveredRules();
+    setDeliveryFlowStatus(`${discoveredRules.length} regra(s) descoberta(s).`);
+  } catch (err) {
+    setDeliveryFlowStatus(`Erro ao descobrir regras: ${err.message}`, 'error');
+  }
+});
+
+document.getElementById('save-flow-snapshot-btn').addEventListener('click', async () => {
+  if (!editingDeliveryId) {
+    setDeliveryFlowStatus('Salve a entrega antes de configurar o fluxo.', 'error');
+    return;
+  }
+  const trackId = document.getElementById('delivery-track-select').value;
+  setDeliveryFlowStatus('Salvando snapshot do fluxo...', 'running');
+  try {
+    const saved = await window.api.buildDeliveryFlowSnapshot({
+      deliveryId: editingDeliveryId,
+      selection: {
+        policyIds: [...selectedPolicyIds],
+        trackId: trackId || undefined,
+        agentProfileIds: [...selectedAgentProfileIds],
+        qualitySkillIds: [...selectedQualitySkillIds]
+      }
+    });
+    renderFlowSnapshotSummary(saved.flowSnapshot);
+    await loadDeliveries();
+    setDeliveryFlowStatus('Snapshot do fluxo salvo.');
+  } catch (err) {
+    setDeliveryFlowStatus(`Erro ao salvar snapshot: ${err.message}`, 'error');
+  }
+});
+
+document.getElementById('run-delivery-track-btn').addEventListener('click', async () => {
+  if (!editingDeliveryId) {
+    setDeliveryFlowStatus('Salve a entrega antes de executar a trilha vinculada.', 'error');
+    return;
+  }
+  const delivery = deliveries.find((item) => item.id === editingDeliveryId);
+  if (!delivery || !delivery.flowSnapshot || !delivery.flowSnapshot.track) {
+    setDeliveryFlowStatus('Salve um snapshot do fluxo com uma trilha selecionada antes de executar.', 'error');
+    return;
+  }
+  const repoPath = delivery.repoPath;
+  const branch = delivery.branch;
+  const files = getSelectedFiles();
+  if (files.length === 0 || repoPath !== getRepoPath() || branch !== document.getElementById('branch-select').value) {
+    setDeliveryFlowStatus('Na aba Review, carregue o mesmo repositório/branch da entrega e selecione arquivos antes de executar.', 'error');
+    return;
+  }
+
+  currentRepoPath = repoPath;
+  invalidateReview();
+  const runGeneration = executionGeneration;
+  activeTrackExecutionId = crypto.randomUUID();
+  livePhaseResults = new Map();
+  setDeliveryFlowStatus('Executando trilha vinculada...', 'running');
+  setExecutionRunning(true);
+  try {
+    const response = await window.api.runValidationTrack({
+      executionId: activeTrackExecutionId,
+      repoPath,
+      branch,
+      files,
+      deliveryId: editingDeliveryId
+    });
+    if (runGeneration !== executionGeneration) return;
+    let findingId = 0;
+    currentFindings = response.phases.flatMap((phase) => (phase.findings || []).map((finding, findingIndex) => ({
+      ...finding,
+      id: findingId++,
+      findingIndex,
+      status: 'pending',
+      applyRunId: phase.applyRunId,
+      historyId: phase.historyId,
+      canApply: phase.canApply,
+      phaseName: phase.phaseName
+    })));
+    currentFileContents = response.fileContents;
+    renderPhaseResults(response.phases);
+    renderFindings();
+    setDeliveryFlowStatus(response.status === 'cancelled'
+      ? 'Trilha vinculada cancelada.'
+      : `Trilha vinculada concluída: ${response.phases.length} fase(s), ${currentFindings.length} finding(s).`);
+    await loadDeliveries();
+  } catch (err) {
+    if (runGeneration !== executionGeneration) return;
+    setDeliveryFlowStatus(`Erro na trilha vinculada: ${err.message}`, 'error');
+  } finally {
+    setExecutionRunning(false);
+    activeTrackExecutionId = null;
+  }
+});
 
 // --- Branch loading + info panel ---
 
@@ -707,6 +1005,10 @@ async function loadValidationTracks() {
     const editedTrack = validationTracks.find((track) => track.id === editingTrackId);
     renderTrackEditor(editedTrack || validationTracks[0] || null);
     renderTrackList();
+    if (editingDeliveryId) {
+      const delivery = deliveries.find((item) => item.id === editingDeliveryId);
+      renderDeliveryTrackSelect(delivery?.flowSnapshot?.track?.id || '');
+    }
   } catch (err) {
     setStatus(`Erro ao carregar trilhas: ${err.message}`, 'error');
   }
@@ -762,6 +1064,7 @@ async function loadAgentProfiles() {
     const editedProfile = agentProfiles.find((profile) => profile.id === editingAgentProfileId);
     renderAgentProfileEditor(editedProfile || agentProfiles[0]);
     renderAgentProfileList();
+    if (editingDeliveryId) renderDeliveryAgentProfileList();
   } catch (err) {
     setStatus(`Erro ao carregar perfis: ${err.message}`, 'error');
   }
@@ -823,6 +1126,7 @@ async function loadQualitySkills() {
     const editedSkill = qualitySkills.find((skill) => skill.id === editingQualitySkillId);
     renderQualitySkillEditor(editedSkill || qualitySkills[0]);
     renderQualitySkillList();
+    if (editingDeliveryId) renderDeliveryQualitySkillList();
   } catch (err) {
     setStatus(`Erro ao carregar skills: ${err.message}`, 'error');
   }
@@ -983,6 +1287,7 @@ document.getElementById('delete-track-btn').addEventListener('click', async () =
 function setExecutionRunning(isRunning) {
   document.getElementById('run-btn').disabled = isRunning;
   document.getElementById('run-track-btn').disabled = isRunning;
+  document.getElementById('run-delivery-track-btn').disabled = isRunning;
   document.getElementById('cancel-track-btn').disabled = !isRunning || !activeTrackExecutionId;
 }
 
