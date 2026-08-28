@@ -421,3 +421,58 @@ test('rejects delivery-linked execution when the delivery cannot be found', asyn
     /delivery/
   );
 });
+
+test('rejects delivery-linked execution cleanly when the flow snapshot has no track selected', async () => {
+  let ran = false;
+  await assert.rejects(
+    runValidationTrack({
+      deliveryId: 'delivery-1',
+      resolveDelivery: () => flowSnapshotDelivery({
+        flowSnapshot: {
+          track: null,
+          agentProfiles: [],
+          qualitySkills: []
+        }
+      }),
+      repoPath: '/work/repository',
+      branch: 'feature/x',
+      track: { phases: [{ id: 'security', type: 'claude', name: 'Security', agent: 'claude', skill: 'security', intensity: 'quick', criteria: '' }] },
+      content: '',
+      allowedFiles: [],
+      promptFilePath,
+      runReview: async () => { ran = true; return []; }
+    }),
+    (error) => error instanceof Error && !(error instanceof TypeError) && /no track selected/.test(error.message)
+  );
+  assert.equal(ran, false);
+});
+
+test('rejects delivery-linked execution when the snapshot track references an agent or skill excluded from the snapshot', async () => {
+  let ran = false;
+  await assert.rejects(
+    runValidationTrack({
+      deliveryId: 'delivery-1',
+      resolveDelivery: () => flowSnapshotDelivery({
+        flowSnapshot: {
+          track: {
+            id: 'track-1',
+            phases: [
+              { id: 'security', type: 'claude', name: 'Security', agent: 'missing-agent', skill: 'snapshot-skill', intensity: 'quick', criteria: '' }
+            ]
+          },
+          agentProfiles: [{ id: 'snapshot-agent', name: 'Snapshot agent', runtime: 'claude', instructions: 'Snapshot instructions.' }],
+          qualitySkills: [{ id: 'snapshot-skill', name: 'Snapshot skill', baseSkill: 'general', instructions: 'Snapshot skill instructions.', canApply: false }]
+        }
+      }),
+      repoPath: '/work/repository',
+      branch: 'feature/x',
+      track: { phases: [] },
+      content: '',
+      allowedFiles: [],
+      promptFilePath,
+      runReview: async () => { ran = true; return []; }
+    }),
+    /agent profile/
+  );
+  assert.equal(ran, false);
+});

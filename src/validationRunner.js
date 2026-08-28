@@ -153,6 +153,18 @@ async function runCommandPhase(phase, { repoPath, allowedFiles, coverageBaseline
   return result;
 }
 
+function assertFlowSnapshotReferences(track, agentProfiles, qualitySkills) {
+  track.phases.filter((phase) => phase.type === 'claude').forEach((phase) => {
+    const profile = agentProfiles.find((item) => item.id === phase.agent);
+    if (!profile || profile.runtime !== 'claude') {
+      throw new Error(`delivery flow snapshot is missing the agent profile for phase "${phase.name}"`);
+    }
+    if (!qualitySkills.some((skill) => skill.id === phase.skill)) {
+      throw new Error(`delivery flow snapshot is missing the quality skill for phase "${phase.name}"`);
+    }
+  });
+}
+
 function resolveDeliveryFlow({ deliveryId, resolveDelivery, deliveryRepoPath, branch }) {
   const delivery = resolveDelivery(deliveryId);
   if (!delivery) throw new Error('delivery was not found');
@@ -160,6 +172,8 @@ function resolveDeliveryFlow({ deliveryId, resolveDelivery, deliveryRepoPath, br
     throw new Error("delivery-linked execution repository or branch does not match the delivery's saved repository or branch");
   }
   if (!delivery.flowSnapshot) throw new Error('delivery does not have a saved flow snapshot');
+  if (!delivery.flowSnapshot.track) throw new Error('delivery has no track selected in its flow snapshot');
+  assertFlowSnapshotReferences(delivery.flowSnapshot.track, delivery.flowSnapshot.agentProfiles, delivery.flowSnapshot.qualitySkills);
   return delivery.flowSnapshot;
 }
 
