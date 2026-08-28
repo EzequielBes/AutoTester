@@ -298,3 +298,126 @@ test('fails a coverage gate below its minimum or beyond its baseline drop', () =
   const drop = evaluateCoverageGate({ minLinesPct: null, maxDropPct: 1, fileScope: 'all' }, coverage, [], { pct: 80 });
   assert.equal(drop.passed, false);
 });
+
+function flowSnapshotDelivery(overrides = {}) {
+  return {
+    id: 'delivery-1',
+    repoPath: '/work/repository',
+    branch: 'feature/x',
+    flowSnapshot: {
+      track: {
+        id: 'track-1',
+        phases: [
+          { id: 'security', type: 'claude', name: 'Security', agent: 'snapshot-agent', skill: 'snapshot-skill', intensity: 'quick', criteria: '' }
+        ]
+      },
+      agentProfiles: [{ id: 'snapshot-agent', name: 'Snapshot agent', runtime: 'claude', instructions: 'Snapshot instructions.' }],
+      qualitySkills: [{ id: 'snapshot-skill', name: 'Snapshot skill', baseSkill: 'general', instructions: 'Snapshot skill instructions.', canApply: false }]
+    },
+    ...overrides
+  };
+}
+
+test('rejects delivery-linked execution when the repository does not match the delivery', async () => {
+  let ran = false;
+  await assert.rejects(
+    runValidationTrack({
+      deliveryId: 'delivery-1',
+      resolveDelivery: () => flowSnapshotDelivery(),
+      repoPath: '/work/other-repository',
+      branch: 'feature/x',
+      track: { phases: [{ id: 'security', type: 'claude', name: 'Security', agent: 'claude', skill: 'security', intensity: 'quick', criteria: '' }] },
+      content: '',
+      allowedFiles: [],
+      promptFilePath,
+      runReview: async () => { ran = true; return []; }
+    }),
+    /repository|branch/
+  );
+  assert.equal(ran, false);
+});
+
+test('rejects delivery-linked execution when the branch does not match the delivery', async () => {
+  let ran = false;
+  await assert.rejects(
+    runValidationTrack({
+      deliveryId: 'delivery-1',
+      resolveDelivery: () => flowSnapshotDelivery(),
+      repoPath: '/work/repository',
+      branch: 'feature/other',
+      track: { phases: [{ id: 'security', type: 'claude', name: 'Security', agent: 'claude', skill: 'security', intensity: 'quick', criteria: '' }] },
+      content: '',
+      allowedFiles: [],
+      promptFilePath,
+      runReview: async () => { ran = true; return []; }
+    }),
+    /repository|branch/
+  );
+  assert.equal(ran, false);
+});
+
+test('delivery-linked execution uses the saved snapshot, not live profiles or skills', async () => {
+  let prompt;
+  const liveAgentProfiles = [{ id: 'snapshot-agent', name: 'Mutated live agent', runtime: 'claude', instructions: 'MUTATED live instructions.' }];
+  const liveQualitySkills = [{ id: 'snapshot-skill', name: 'Mutated live skill', baseSkill: 'general', instructions: 'MUTATED live skill instructions.', canApply: false }];
+
+  const results = await runValidationTrack({
+    deliveryId: 'delivery-1',
+    resolveDelivery: () => flowSnapshotDelivery(),
+    repoPath: '/work/repository',
+    branch: 'feature/x',
+    // Live track/profiles/skills the caller would normally pass — must be ignored in favor of the snapshot.
+    track: { phases: [{ id: 'other', type: 'claude', name: 'Other', agent: 'claude', skill: 'security', intensity: 'quick', criteria: '' }] },
+    agentProfiles: liveAgentProfiles,
+    qualitySkills: liveQualitySkills,
+    content: '=== src/a.js ===\nconst value = 1;',
+    allowedFiles: ['src/a.js'],
+    promptFilePath,
+    runReview: async (systemPrompt) => {
+      prompt = systemPrompt;
+      return [];
+    }
+  });
+
+  assert.equal(results.length, 1);
+  assert.equal(results[0].phaseId, 'security');
+  assert.equal(results[0].agentProfileName, 'Snapshot agent');
+  assert.equal(results[0].skillName, 'Snapshot skill');
+  assert.match(prompt, /Snapshot instructions\./);
+  assert.match(prompt, /Snapshot skill instructions\./);
+  assert.doesNotMatch(prompt, /MUTATED/);
+});
+
+test('rejects delivery-linked execution when the delivery has no saved flow snapshot', async () => {
+  await assert.rejects(
+    runValidationTrack({
+      deliveryId: 'delivery-1',
+      resolveDelivery: () => flowSnapshotDelivery({ flowSnapshot: null }),
+      repoPath: '/work/repository',
+      branch: 'feature/x',
+      track: { phases: [] },
+      content: '',
+      allowedFiles: [],
+      promptFilePath,
+      runReview: async () => []
+    }),
+    /flow snapshot|snapshot/
+  );
+});
+
+test('rejects delivery-linked execution when the delivery cannot be found', async () => {
+  await assert.rejects(
+    runValidationTrack({
+      deliveryId: 'missing-delivery',
+      resolveDelivery: () => null,
+      repoPath: '/work/repository',
+      branch: 'feature/x',
+      track: { phases: [] },
+      content: '',
+      allowedFiles: [],
+      promptFilePath,
+      runReview: async () => []
+    }),
+    /delivery/
+  );
+});

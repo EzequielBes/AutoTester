@@ -24,7 +24,10 @@ const { resolveInRepo } = require('./src/resolveInRepo');
 const { findVSCodeExe } = require('./src/editorLocator');
 const { validateFindings } = require('./src/findingsSchema');
 const { readValidationTracks, writeValidationTracks, validateTrack } = require('./src/validationTrackStore');
-const { runValidationTrack } = require('./src/validationRunner');
+const { runValidationTrack, resolveDeliveryFlow } = require('./src/validationRunner');
+const { readProjectPolicies, writeProjectPolicies } = require('./src/projectPolicyStore');
+const { discoverRepositoryRules } = require('./src/repositoryRuleDiscovery');
+const { readDelivery } = require('./src/deliveryStore');
 const { filterFiles } = require('./src/fileScope');
 const { registerHistoryIpc } = require('./src/historyIpc');
 const { registerDeliveryIpc } = require('./src/deliveryIpc');
@@ -406,6 +409,21 @@ ipcMain.handle('validation-tracks:delete', (event, trackId) => {
   return true;
 });
 
+ipcMain.handle('project-policies:list', (event) => {
+  assertTrustedRenderer(event);
+  return readProjectPolicies(projectPoliciesFilePath());
+});
+
+ipcMain.handle('project-policies:save', (event, policies) => {
+  assertTrustedRenderer(event);
+  return writeProjectPolicies(projectPoliciesFilePath(), policies);
+});
+
+ipcMain.handle('project-policies:discover', (event, { repoPath, branch }) => {
+  assertTrustedRenderer(event);
+  return discoverRepositoryRules(repoPath, branch);
+});
+
 ipcMain.handle('agent-profiles:list', (event) => {
   assertTrustedRenderer(event);
   return readAgentProfiles(agentProfilesFilePath());
@@ -472,7 +490,7 @@ ipcMain.handle('quality-skills:delete', (event, skillId) => {
   return writeQualitySkills(qualitySkillsFilePath(), updatedSkills);
 });
 
-ipcMain.handle('validation-tracks:run', async (event, { executionId, trackId, repoPath, branch, files }) => {
+ipcMain.handle('validation-tracks:run', async (event, { executionId, trackId, repoPath, branch, files, deliveryId }) => {
   assertTrustedRenderer(event);
   if (typeof executionId !== 'string' || executionId.length === 0) throw new Error('validation track execution id is required');
   if (validationTrackRuns.has(executionId)) throw new Error('validation track is already running');
@@ -482,11 +500,23 @@ ipcMain.handle('validation-tracks:run', async (event, { executionId, trackId, re
     if (!event.sender.isDestroyed()) event.sender.send('validation-tracks:progress', { executionId, kind: 'phase', ...progress });
   };
   try {
-  const track = readValidationTracks(validationTracksFilePath()).find((item) => item.id === trackId);
-  if (!track) throw new Error('validation track was not found');
-  const agentProfiles = readAgentProfiles(agentProfilesFilePath());
-  const qualitySkills = readQualitySkills(qualitySkillsFilePath());
-  assertTrackReferences(track, agentProfiles, qualitySkills);
+  let track;
+  let agentProfiles;
+  let qualitySkills;
+  if (deliveryId) {
+    ({ track, agentProfiles, qualitySkills } = resolveDeliveryFlow({
+      deliveryId,
+      resolveDelivery: (id) => readDelivery(deliveriesFilePath(), id),
+      deliveryRepoPath: repoPath,
+      branch
+    }));
+  } else {
+    track = readValidationTracks(validationTracksFilePath()).find((item) => item.id === trackId);
+    if (!track) throw new Error('validation track was not found');
+    agentProfiles = readAgentProfiles(agentProfilesFilePath());
+    qualitySkills = readQualitySkills(qualitySkillsFilePath());
+    assertTrackReferences(track, agentProfiles, qualitySkills);
+  }
   const snapshot = createReviewSnapshot(repoPath, branch, files);
   const commandRepoPath = resolveInRepo(repoPath, '');
   if (track.phases.some((phase) => phase.type === 'command')) {

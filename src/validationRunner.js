@@ -153,11 +153,25 @@ async function runCommandPhase(phase, { repoPath, allowedFiles, coverageBaseline
   return result;
 }
 
+function resolveDeliveryFlow({ deliveryId, resolveDelivery, deliveryRepoPath, branch }) {
+  const delivery = resolveDelivery(deliveryId);
+  if (!delivery) throw new Error('delivery was not found');
+  if (delivery.repoPath !== deliveryRepoPath || delivery.branch !== branch) {
+    throw new Error("delivery-linked execution repository or branch does not match the delivery's saved repository or branch");
+  }
+  if (!delivery.flowSnapshot) throw new Error('delivery does not have a saved flow snapshot');
+  return delivery.flowSnapshot;
+}
+
 async function runValidationTrack({
   track,
   content,
   allowedFiles,
   repoPath,
+  deliveryRepoPath = repoPath,
+  branch,
+  deliveryId,
+  resolveDelivery,
   agentProfiles = [{ id: 'claude', name: 'Claude padrão', runtime: 'claude', instructions: '' }],
   qualitySkills = DEFAULT_QUALITY_SKILLS,
   promptFilePath,
@@ -169,6 +183,12 @@ async function runValidationTrack({
   signal,
   onPhaseProgress
 }) {
+  if (deliveryId) {
+    const flowSnapshot = resolveDeliveryFlow({ deliveryId, resolveDelivery, deliveryRepoPath, branch });
+    track = flowSnapshot.track;
+    agentProfiles = flowSnapshot.agentProfiles;
+    qualitySkills = flowSnapshot.qualitySkills;
+  }
   const results = [];
   let index = 0;
   const claudeOptions = { content, allowedFiles, promptFilePath, agentProfiles, qualitySkills, runReview, signal, onPhaseProgress };
@@ -217,4 +237,4 @@ async function runValidationTrack({
   return results;
 }
 
-module.exports = { MAX_CLAUDE_CONCURRENCY, readCoverageFileState, coverageFileChanged, runClaudePhase, runClaudeBatch, runCommandPhase, evaluateCoverageGate, runValidationTrack };
+module.exports = { MAX_CLAUDE_CONCURRENCY, readCoverageFileState, coverageFileChanged, runClaudePhase, runClaudeBatch, runCommandPhase, evaluateCoverageGate, resolveDeliveryFlow, runValidationTrack };

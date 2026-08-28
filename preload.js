@@ -34,6 +34,10 @@ contextBridge.exposeInMainWorld('api', {
   listDeliveries: () => ipcRenderer.invoke('deliveries:list'),
   openDelivery: (deliveryId) => ipcRenderer.invoke('deliveries:open', deliveryId),
   saveDelivery: (draft) => ipcRenderer.invoke('deliveries:save', draft),
+  buildDeliveryFlowSnapshot: (params) => ipcRenderer.invoke('deliveries:build-flow-snapshot', params),
+  listProjectPolicies: () => ipcRenderer.invoke('project-policies:list'),
+  saveProjectPolicies: (policies) => ipcRenderer.invoke('project-policies:save', policies),
+  discoverRepositoryRules: (params) => ipcRenderer.invoke('project-policies:discover', params),
   pickFolder: () => ipcRenderer.invoke('dialog:pick-folder'),
   revealRepo: (repoPath) => ipcRenderer.invoke('shell:reveal-repo', repoPath),
   openInEditor: (params) => ipcRenderer.invoke('shell:open-in-editor', params)
