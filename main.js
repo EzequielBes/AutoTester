@@ -601,7 +601,7 @@ ipcMain.handle('shell:open-in-editor', (event, { repoPath, file, lines }) => {
   }
   const exe = findVSCodeExe();
   if (!exe) {
-    throw new Error('VS Code não encontrado (Code.exe)');
+    throw new Error('VS Code não encontrado no PATH ou na instalação local');
   }
   const line = String(lines).split('-')[0];
   return new Promise((resolve, reject) => {

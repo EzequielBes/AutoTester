@@ -2,15 +2,26 @@
 
 const path = require('node:path');
 
-// ponytail: `code` on PATH is a .cmd wrapper, and Windows can't CreateProcess
-// a .cmd directly without going through cmd.exe's own metacharacter parsing
-// (the class of bug behind CVE-2024-27980). Locating the real Code.exe next
-// to it lets openInEditor spawn a plain PE binary with argv, no shell at all.
 function findVSCodeExe({
   execFileSync = require('node:child_process').execFileSync,
   existsSync = require('node:fs').existsSync,
-  env = process.env
+  env = process.env,
+  platform = process.platform
 } = {}) {
+  if (platform !== 'win32') {
+    for (const command of ['code', 'code-insiders']) {
+      try {
+        const executable = execFileSync('which', [command], { encoding: 'utf8' }).trim().split(/\r?\n/)[0].trim();
+        if (executable && existsSync(executable)) return executable;
+      } catch {
+        // Try the next editor command available on PATH.
+      }
+    }
+    return null;
+  }
+
+  // `code` on PATH is a .cmd wrapper, and Windows can't CreateProcess a .cmd
+  // directly without cmd.exe parsing. Locate the adjacent PE binary instead.
   try {
     const whereOut = execFileSync('where', ['code.cmd'], { encoding: 'utf8' }).trim().split(/\r?\n/)[0].trim();
     if (whereOut) {

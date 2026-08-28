@@ -3,13 +3,15 @@
   "version": "1.0.0",
   "description": "Local Electron quality validation and audit workflow tool.",
   "author": "Ezequiel Bes",
+  "desktopName": "autotester",
   "private": true,
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "test": "node --test",
     "pack": "electron-builder --dir",
-    "dist": "electron-builder --win nsis"
+    "dist": "electron-builder --win nsis",
+    "dist:linux": "electron-builder --linux AppImage"
   },
   "devDependencies": {
     "electron": "44.0.0",
@@ -35,6 +37,11 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
+    },
+    "linux": {
+      "target": "AppImage",
+      "category": "Development",
+      "syncDesktopName": true
     }
   }
 }

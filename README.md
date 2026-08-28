@@ -42,6 +42,14 @@ npm run dist  # creates the NSIS installer in release/
 
 The installer is unsigned. Windows may show a SmartScreen prompt until a code-signing certificate is configured.
 
+## Linux Build
+
+```bash
+npm run dist:linux  # creates an AppImage in release/
+```
+
+The AppImage requires a FUSE-compatible runtime on many distributions. Build it on Linux or CI; Windows cross-builds need Developer Mode or elevated symlink privileges. VS Code is opened through `code` or `code-insiders` on `PATH`.
+
 ## Notes
 
 Review file content is piped to the `claude` CLI via stdin rather than passed as a command-line argument, to stay under Windows' ~32767-character command-line length limit for large file selections.
