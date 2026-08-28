@@ -42,3 +42,10 @@ Implemented local-only delivery IPC. No Azure integration, policy handling, auto
 ## Concerns
 
 - This task intentionally keeps status and event lifecycle management in the main process as initial `draft` state. Later milestone work should add explicit, validated transitions rather than accepting those fields from renderer drafts.
+
+## Fix Round 1: Monotonic Update Timestamps
+
+- Root cause: an update used the wall-clock ISO timestamp directly, which can equal the stored `updatedAt` when both writes occur in one millisecond.
+- Added a regression test with a stored future timestamp. Before the fix, `node --test test/deliveryIpc.test.js` failed because the persisted timestamp was not strictly later.
+- Updates now use the current time when it is later than the stored timestamp; otherwise they persist one millisecond after the stored timestamp.
+- Post-fix focused verification: `node --test test/deliveryIpc.test.js`: 4 passed, 0 failed.

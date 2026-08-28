@@ -78,3 +78,11 @@ test('updates an existing delivery without accepting renderer timestamps', () =>
   assert.notEqual(saved.updatedAt, original.updatedAt);
   assert.equal(saved.objective, 'Updated objective.');
 });
+
+test('sets an update timestamp strictly later than the stored timestamp', () => {
+  const original = { ...storedDelivery(), updatedAt: '2999-01-01T00:00:00.000Z' };
+  const { handlers } = setup({ deliveries: [original] });
+  const saved = handlers.get('deliveries:save')({ sender: {} }, draft({ id: original.id }));
+
+  assert.ok(Date.parse(saved.updatedAt) > Date.parse(original.updatedAt));
+});

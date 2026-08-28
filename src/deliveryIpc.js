@@ -7,7 +7,11 @@ function buildDeliveryFromDraft(draft, existing) {
   if (!draft || typeof draft !== 'object' || Array.isArray(draft)) {
     throw new Error('delivery draft must be an object');
   }
-  const now = new Date().toISOString();
+  const now = new Date();
+  const previousUpdatedAt = new Date(existing?.updatedAt);
+  const updatedAt = existing && now <= previousUpdatedAt
+    ? new Date(previousUpdatedAt.getTime() + 1).toISOString()
+    : now.toISOString();
   return {
     id: existing ? existing.id : crypto.randomUUID(),
     repoPath: draft.repoPath,
@@ -17,8 +21,8 @@ function buildDeliveryFromDraft(draft, existing) {
     status: 'draft',
     nextAction: draft.nextAction,
     blockedReason: draft.blockedReason,
-    createdAt: existing ? existing.createdAt : now,
-    updatedAt: now,
+    createdAt: existing ? existing.createdAt : now.toISOString(),
+    updatedAt,
     events: existing ? existing.events : []
   };
 }
