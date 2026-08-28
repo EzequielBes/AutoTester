@@ -31,17 +31,19 @@ const { readHistorySettings, writeHistorySettings } = require('./src/historySett
 const { DEFAULT_AGENT_PROFILE, readAgentProfiles, writeAgentProfiles, validateProfile } = require('./src/agentProfileStore');
 const { DEFAULT_QUALITY_SKILLS, readQualitySkills, writeQualitySkills, validateSkill } = require('./src/qualitySkillStore');
 const { startSingleInstanceApp } = require('./src/appLifecycle');
+const { configureWindowSecurity } = require('./src/windowSecurity');
 
 const PROMPT_FILE = path.join(__dirname, 'prompts', 'review-prompt.md');
 const reviewRuns = new Map();
 const validationTrackRuns = new Map();
+let mainWindow = null;
 
 function contentHash(content) {
   return crypto.createHash('sha256').update(content).digest('hex');
 }
 
 function createWindow() {
-  const win = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 1100,
     height: 800,
     webPreferences: {
@@ -50,10 +52,22 @@ function createWindow() {
       nodeIntegration: false
     }
   });
-  win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+  configureWindowSecurity(mainWindow.webContents, localRendererUrl());
+  mainWindow.on('closed', () => { mainWindow = null; });
+  mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
 }
 
-startSingleInstanceApp(app, createWindow);
+function localRendererUrl() {
+  return pathToFileURL(path.join(__dirname, 'renderer', 'index.html')).href;
+}
+
+function focusMainWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.focus();
+}
+
+startSingleInstanceApp(app, createWindow, focusMainWindow);
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
@@ -87,8 +101,7 @@ function qualitySkillsFilePath() {
 }
 
 function assertTrustedRenderer(event) {
-  const expectedUrl = pathToFileURL(path.join(__dirname, 'renderer', 'index.html')).href;
-  if (event.senderFrame.url !== expectedUrl) {
+  if (event.senderFrame.url !== localRendererUrl()) {
     throw new Error('validation commands are only available from the local renderer');
   }
 }

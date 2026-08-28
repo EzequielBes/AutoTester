@@ -6,6 +6,8 @@ AutoTester e uma aplicacao Electron local dividida em tres camadas:
 - `preload.js`: API IPC explicita e limitada para o renderer.
 - `main.js` e `src/`: Git, filesystem, Claude CLI, execucao de comandos, historico e persistencia.
 
+O renderer local e a unica URL navegavel: novas janelas e navegacao para outros destinos sao bloqueadas. Uma segunda abertura foca a janela existente em vez de iniciar outro processo.
+
 ## Seguranca de contexto
 
 Uma analise le o conteudo do commit da branch selecionada. Antes de aplicar um finding, a aplicacao exige a mesma branch, o mesmo commit, o mesmo hash de arquivo e um token efemero da execucao. Entradas historicas nao carregam esse token e sao somente leitura.
