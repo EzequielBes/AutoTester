@@ -44,33 +44,62 @@ O principio central e que a automacao produz evidencia, mas nao muda o codigo so
 - Configuracao AppImage para Linux via `npm run dist:linux`.
 - Descoberta de VS Code no Windows, Linux e macOS (`code` ou `code-insiders`).
 
+### Entregas: Fundacao
+
+- Modelo de Entrega local e versionado (`src/deliveryStore.js`), com migracao de schema e escrita atomica.
+- IPC protegida para listar, abrir e salvar Entregas.
+- `Entregas` como aba inicial: lista, criacao, edicao, detalhe e linha do tempo de eventos.
+- Estados de Entrega: `draft`, `active`, `blocked`, `validating`, `ready-for-pr`, `waiting-approval`, `merged`, `cancelled`.
+
+### Entregas: Politicas, Fluxos e Agentes
+
+- Descoberta de regras do repositorio por allowlist (`AGENTS.md`, `CLAUDE.md`, `CONTEXT.md`, `CONTRIBUTING.md`, templates de PR) e armazenamento local de Politicas de Projeto.
+- Snapshot imutavel de Fluxo (`flowSnapshot`) por Entrega: copia profunda de politicas, trilha, perfis de agente e skills selecionados no momento do snapshot, sem referencia a registros ao vivo.
+- Execucao de trilha vinculada a uma Entrega (`deliveryId`): rejeita branch ou repositorio divergente e snapshot internamente inconsistente antes de rodar qualquer fase, garantindo reproducibilidade mesmo apos perfis/skills mudarem.
+- Interface de detalhe da Entrega para descobrir regras, selecionar politica/trilha/agentes/skills, salvar snapshot e rodar a trilha vinculada.
+
+### Entregas: Cadeia e Conector Azure
+
+- Conector Azure via Claude CLI e MCP ja autenticado (`src/azureConnector.js`), sem API Azure direta nem armazenamento de credenciais; envelope JSON validado e limitado a metadados de repositorio, branch, PR, status, revisores e work items.
+- Sincronizacao de uma Entrega com o Azure DevOps (`deliveries:sync-azure`): consulta roda no diretorio do repositorio da Entrega; falha, indisponibilidade ou resposta invalida do MCP nunca bloqueiam o uso local — viram inconsistencia acionavel registrada na linha do tempo.
+- Detector de inconsistencias (`src/deliveryInconsistencyDetector.js`): branch ou base divergente, PR ausente ou apontando para destino diferente de `Dev`, repositorio Azure diferente do repositorio local, dependencia de cadeia nao aprovada.
+- Cadeia de Entregas (`delivery.chain`, schema v3): lista ordenada de Entregas dependentes. Sugestao gerada pelo Claude a partir de Git e Azure fica em estado transiente na interface — so vira estado persistido apos confirmacao humana explicita; rejeitar descarta sem qualquer escrita.
+- Interface de detalhe da Entrega com sincronizacao Azure, lista de inconsistencias e fluxo de sugestao/confirmacao de cadeia.
+
 ## Estado Atual
 
-- Suite Node: 117 testes aprovados na ultima execucao completa.
+- Suite Node: 214 testes aprovados na ultima execucao completa.
 - Build Windows: validado com `npm run pack` e `npm run dist`.
 - AppImage Linux: configurado, mas deve ser gerado em Linux ou CI. O host Windows atual nao tem privilegio de symlink, WSL de usuario ou Docker ativo para validar esse artefato nativamente.
 - Distribuicoes ainda usam icone padrao do Electron e nao possuem assinatura de codigo.
+- Entregas ainda nao possuem Escopo ou Exceção de escopo — ver Proximos Marcos.
 
 ## Proximos Marcos
 
-### 1. CI Multiplataforma
+### 1. Entregas: Escopo e Exceção
+
+- Escopo de Entrega por arquivos, pastas e glob; Guardiao de escopo compara mudancas antes de uma fase com escrita automatica aplicar.
+- Registro de Exceção de escopo com arquivos afetados, justificativa, agente/fase responsavel e data; sem essa informacao a fase nao conclui como aprovada.
+- Permissao de escrita como propriedade explicita da fase, copiada para o snapshot da execucao.
+
+### 2. CI Multiplataforma
 
 - Criar workflow GitHub Actions para rodar `npm test` em Windows e Linux.
 - Produzir o instalador NSIS e o AppImage em runners nativos.
 - Publicar artefatos anexados a cada release ou execucao manual.
 
-### 2. Release Profissional
+### 3. Release Profissional
 
 - Adicionar icone proprio para Windows e Linux.
 - Definir versionamento semantico, changelog e notas de release.
 - Configurar assinatura de codigo Windows para reduzir avisos do SmartScreen.
 
-### 3. Validacao de Interface
+### 4. Validacao de Interface
 
-- Cobrir fluxos Electron completos: criar trilha, executar, cancelar, abrir historico e exportar.
+- Cobrir fluxos Electron completos: criar Entrega, executar Fluxo, retomar em outra sessao, registrar Exceção, criar trilha, executar, cancelar, abrir historico e exportar.
 - Exercitar a instalacao e primeira execucao dos artefatos Windows e Linux em ambientes limpos.
 
-### 4. Evolucao de Produto
+### 5. Evolucao de Produto
 
 - Avaliar novos runtimes de agentes apenas quando houver adaptadores reais e testaveis.
 - Avaliar redacao opcional de logs antes de permitir a persistencia opt-in.
