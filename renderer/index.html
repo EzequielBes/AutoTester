@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'" />
-  <title>Review GUI</title>
+  <title>AutoTester</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -12,16 +12,57 @@
   <header class="app-header">
     <div class="brand">
       <span class="brand-dot" id="brand-dot"></span>
-      <h1>REVIEW&#8202;/&#8202;GUI</h1>
+      <h1>AT&#8202;/&#8202;AUTOTESTER</h1>
     </div>
     <nav class="tabs" role="tablist">
-      <button type="button" class="tab active" id="tab-review" role="tab" aria-selected="true">Review</button>
+      <button type="button" class="tab active" id="tab-deliveries" role="tab" aria-selected="true">Entregas</button>
+      <button type="button" class="tab" id="tab-review" role="tab" aria-selected="false">Review</button>
       <button type="button" class="tab" id="tab-tracks" role="tab" aria-selected="false">Trilhas</button>
       <button type="button" class="tab" id="tab-history" role="tab" aria-selected="false">Log</button>
     </nav>
   </header>
 
   <main>
+    <section id="view-deliveries" class="view">
+      <div class="delivery-layout">
+        <aside class="panel delivery-list-panel">
+          <div class="delivery-list-header">
+            <div>
+              <p class="eyebrow">Contexto local</p>
+              <h2>Entregas</h2>
+            </div>
+            <button type="button" id="new-delivery-btn" class="primary">Nova entrega</button>
+          </div>
+          <p class="helper-text">Contexto de feature persistido nesta máquina.</p>
+          <div id="delivery-list" aria-live="polite"></div>
+        </aside>
+
+        <section class="panel delivery-workspace">
+          <div id="delivery-detail-header" class="delivery-detail-header"></div>
+          <form id="delivery-editor" novalidate>
+            <input type="hidden" id="delivery-id" />
+            <label>Objetivo<textarea id="delivery-objective" maxlength="2000" required placeholder="O que esta entrega precisa realizar?"></textarea></label>
+            <label>Repositório<input type="text" id="delivery-repo-path" maxlength="2000" required placeholder="C:\caminho\para\o\repo" /></label>
+            <div class="row">
+              <label class="grow">Branch<input type="text" id="delivery-branch" maxlength="2000" required placeholder="feature/minha-entrega" /></label>
+              <label class="grow">Branch base<input type="text" id="delivery-base-branch" maxlength="2000" required placeholder="Dev" /></label>
+            </div>
+            <div class="row">
+              <label class="grow">Status<select id="delivery-status" disabled><option value="draft">Rascunho</option><option value="active">Ativa</option><option value="blocked">Impedida</option><option value="validating">Em validação</option><option value="ready-for-pr">Pronta para PR</option><option value="waiting-approval">Aguardando aprovação</option><option value="merged">Integrada</option><option value="cancelled">Cancelada</option></select></label>
+              <p class="helper-text delivery-status-note">O status será evoluído nos próximos marcos.</p>
+            </div>
+            <label>Próxima ação<input type="text" id="delivery-next-action" maxlength="2000" placeholder="Qual é o próximo passo?" /></label>
+            <label>Motivo do impedimento<textarea id="delivery-blocked-reason" maxlength="2000" placeholder="Registre um impedimento, se houver."></textarea></label>
+            <div class="actions"><button type="submit" class="primary">Salvar entrega</button></div>
+          </form>
+          <section class="delivery-timeline-section" aria-labelledby="delivery-timeline-title">
+            <h2 id="delivery-timeline-title" class="panel-title">Linha do tempo</h2>
+            <div id="delivery-timeline"></div>
+          </section>
+        </section>
+      </div>
+    </section>
+
     <section id="view-review" class="view">
       <div class="panel bracket" id="setup" style="--d: 0">
         <h2 class="panel-title">Repositório</h2>

@@ -25,6 +25,8 @@ let branchGeneration = 0;
 let executionGeneration = 0;
 let activeTrackExecutionId = null;
 let livePhaseResults = new Map();
+let deliveries = [];
+let editingDeliveryId = null;
 
 function invalidateReview() {
   if (activeTrackExecutionId) {
@@ -142,9 +144,12 @@ populateRecentRepos();
 loadValidationTracks();
 loadAgentProfiles();
 loadQualitySkills();
+renderDeliveryEditor(null);
+loadDeliveries();
 
 // --- Tabs ---
 
+document.getElementById('tab-deliveries').addEventListener('click', () => switchTab('deliveries'));
 document.getElementById('tab-review').addEventListener('click', () => switchTab('review'));
 document.getElementById('tab-tracks').addEventListener('click', () => switchTab('tracks'));
 document.getElementById('tab-history').addEventListener('click', () => switchTab('history'));
@@ -164,17 +169,20 @@ document.getElementById('save-history-settings-btn').addEventListener('click', a
 });
 
 function switchTab(name) {
+  const isDeliveries = name === 'deliveries';
   const isReview = name === 'review';
   const isTracks = name === 'tracks';
   const isHistory = name === 'history';
+  document.getElementById('view-deliveries').classList.toggle('hidden', !isDeliveries);
   document.getElementById('view-review').classList.toggle('hidden', !isReview);
   document.getElementById('view-tracks').classList.toggle('hidden', !isTracks);
   document.getElementById('view-history').classList.toggle('hidden', !isHistory);
-  [['review', isReview], ['tracks', isTracks], ['history', isHistory]].forEach(([tab, active]) => {
+  [['deliveries', isDeliveries], ['review', isReview], ['tracks', isTracks], ['history', isHistory]].forEach(([tab, active]) => {
     const element = document.getElementById(`tab-${tab}`);
     element.classList.toggle('active', active);
     element.setAttribute('aria-selected', String(active));
   });
+  if (isDeliveries) loadDeliveries();
   if (isTracks) {
     loadValidationTracks();
     loadAgentProfiles();
@@ -183,6 +191,159 @@ function switchTab(name) {
   if (isHistory) {
     loadHistorySettings();
     loadHistory();
+  }
+}
+
+// --- Deliveries ---
+
+const DELIVERY_STATUS_LABELS = {
+  draft: 'Rascunho', active: 'Ativa', blocked: 'Impedida', validating: 'Em validação',
+  'ready-for-pr': 'Pronta para PR', 'waiting-approval': 'Aguardando aprovação',
+  merged: 'Integrada', cancelled: 'Cancelada'
+};
+
+async function loadDeliveries() {
+  try {
+    deliveries = await window.api.listDeliveries();
+    renderDeliveryList(deliveries);
+    const edited = deliveries.find((delivery) => delivery.id === editingDeliveryId);
+    if (editingDeliveryId && !edited) renderDeliveryEditor(null);
+  } catch (err) {
+    setStatus(`Erro ao carregar entregas: ${err.message}`, 'error');
+  }
+}
+
+function renderDeliveryList(items) {
+  const list = document.getElementById('delivery-list');
+  list.textContent = '';
+  if (items.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'empty-state';
+    empty.textContent = 'Nenhuma entrega local ainda. Crie a primeira para registrar o contexto da feature.';
+    list.appendChild(empty);
+    return;
+  }
+  items.forEach((delivery) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'delivery-list-entry';
+    if (delivery.id === editingDeliveryId) button.classList.add('active');
+    const objective = document.createElement('strong');
+    objective.textContent = delivery.objective;
+    const meta = document.createElement('span');
+    meta.className = 'technical-value';
+    meta.textContent = `${delivery.branch} -> ${delivery.baseBranch}`;
+    const status = document.createElement('span');
+    status.className = 'delivery-status';
+    status.textContent = DELIVERY_STATUS_LABELS[delivery.status] || delivery.status;
+    button.append(objective, meta, status);
+    button.addEventListener('click', () => openDelivery(delivery.id));
+    list.appendChild(button);
+  });
+}
+
+async function openDelivery(deliveryId) {
+  try {
+    const delivery = await window.api.openDelivery(deliveryId);
+    if (!delivery) {
+      setStatus('Entrega não encontrada.', 'error');
+      return;
+    }
+    renderDeliveryDetail(delivery);
+    renderDeliveryList(deliveries);
+  } catch (err) {
+    setStatus(`Erro ao abrir entrega: ${err.message}`, 'error');
+  }
+}
+
+function renderDeliveryDetail(delivery) {
+  editingDeliveryId = delivery.id;
+  renderDeliveryEditor(delivery);
+  const header = document.getElementById('delivery-detail-header');
+  header.textContent = '';
+  const eyebrow = document.createElement('p');
+  eyebrow.className = 'eyebrow';
+  eyebrow.textContent = 'Entrega local';
+  const title = document.createElement('h2');
+  title.textContent = delivery.objective;
+  const updated = document.createElement('p');
+  updated.className = 'helper-text technical-value';
+  updated.textContent = `Atualizada ${new Date(delivery.updatedAt).toLocaleString('pt-BR')}`;
+  header.append(eyebrow, title, updated);
+  renderDeliveryTimeline(delivery.events);
+}
+
+function renderDeliveryEditor(delivery) {
+  editingDeliveryId = delivery?.id || null;
+  document.getElementById('delivery-id').value = delivery?.id || '';
+  document.getElementById('delivery-objective').value = delivery?.objective || '';
+  document.getElementById('delivery-repo-path').value = delivery?.repoPath || '';
+  document.getElementById('delivery-branch').value = delivery?.branch || '';
+  document.getElementById('delivery-base-branch').value = delivery?.baseBranch || 'Dev';
+  document.getElementById('delivery-status').value = delivery?.status || 'draft';
+  document.getElementById('delivery-next-action').value = delivery?.nextAction || '';
+  document.getElementById('delivery-blocked-reason').value = delivery?.blockedReason || '';
+  if (!delivery) {
+    const header = document.getElementById('delivery-detail-header');
+    header.textContent = '';
+    const title = document.createElement('h2');
+    title.textContent = 'Nova entrega';
+    header.appendChild(title);
+    renderDeliveryTimeline([]);
+  }
+}
+
+function renderDeliveryTimeline(events) {
+  const timeline = document.getElementById('delivery-timeline');
+  timeline.textContent = '';
+  if (events.length === 0) {
+    const empty = document.createElement('p');
+    empty.className = 'helper-text';
+    empty.textContent = 'Nenhum evento registrado neste marco.';
+    timeline.appendChild(empty);
+    return;
+  }
+  events.forEach((event) => {
+    const item = document.createElement('article');
+    item.className = 'delivery-event';
+    const kind = document.createElement('strong');
+    kind.textContent = event.kind;
+    const detail = document.createElement('p');
+    detail.textContent = event.detail;
+    const timestamp = document.createElement('time');
+    timestamp.className = 'technical-value';
+    timestamp.dateTime = event.timestamp;
+    timestamp.textContent = new Date(event.timestamp).toLocaleString('pt-BR');
+    item.append(kind, detail, timestamp);
+    timeline.appendChild(item);
+  });
+}
+
+document.getElementById('new-delivery-btn').addEventListener('click', () => {
+  renderDeliveryEditor(null);
+  renderDeliveryList(deliveries);
+  document.getElementById('delivery-objective').focus();
+});
+
+document.getElementById('delivery-editor').addEventListener('submit', saveDelivery);
+
+async function saveDelivery(event) {
+  event.preventDefault();
+  try {
+    const saved = await window.api.saveDelivery({
+      id: document.getElementById('delivery-id').value || undefined,
+      objective: document.getElementById('delivery-objective').value.trim(),
+      repoPath: document.getElementById('delivery-repo-path').value.trim(),
+      branch: document.getElementById('delivery-branch').value.trim(),
+      baseBranch: document.getElementById('delivery-base-branch').value.trim(),
+      nextAction: document.getElementById('delivery-next-action').value.trim(),
+      blockedReason: document.getElementById('delivery-blocked-reason').value.trim()
+    });
+    renderDeliveryDetail(saved);
+    await loadDeliveries();
+    setStatus(`Entrega "${saved.objective}" salva.`);
+  } catch (err) {
+    setStatus(`Erro ao salvar entrega: ${err.message}`, 'error');
   }
 }
 

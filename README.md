@@ -1,10 +1,11 @@
 # AutoTester
 
-Aplicação Electron local para validar qualidade de repositórios Git com Claude CLI, trilhas de validação, subagentes paralelos, testes por comando, cobertura LCOV e histórico auditável.
+Aplicação Electron local para organizar Entregas e validar qualidade de repositórios Git com Claude CLI, trilhas de validação, subagentes paralelos, testes por comando, cobertura LCOV e histórico auditável.
 
 ## Capacidades
 
 - Seleção de branch, pastas, arquivos e filtros glob.
+- Entregas locais que preservam o contexto de feature, decisões, impedimentos, próximos passos e evidências de validação entre sessões.
 - Trilhas com fases Claude ou comandos de teste, perfis de agente e skills editáveis.
 - Subagentes Claude paralelos, com limite de duas fases simultâneas.
 - Cobertura LCOV com mínimos, tolerância de queda e baseline local.

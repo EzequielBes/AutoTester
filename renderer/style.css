@@ -1,15 +1,19 @@
 :root {
-  --void: #05080a;
-  --panel: #0a1216;
-  --line: #16262b;
-  --cyan: #52e6ff;
+  --void: #131923;
+  --panel: #1a2230;
+  --line: #344154;
+  --neutral: #7890aa;
+  --success: #70c6b2;
+  --warning: #e7b66b;
+  --danger: #df7f82;
+  --cyan: var(--success);
   --cyan-dim: #1f6a7d;
-  --amber: #ffb020;
-  --alert: #ff3b30;
-  --text: #d7f3f8;
-  --text-dim: #5f8a94;
+  --amber: var(--warning);
+  --alert: var(--danger);
+  --text: #edf2f8;
+  --text-dim: #aebccc;
   --mono: 'Cascadia Code', 'Cascadia Mono', Consolas, 'SF Mono', monospace;
-  --sans: 'Segoe UI', system-ui, sans-serif;
+  --sans: Inter, Manrope, 'Segoe UI', system-ui, sans-serif;
 }
 
 * {
@@ -24,7 +28,7 @@ body {
   margin: 0;
   background: var(--void);
   color: var(--text);
-  font-family: var(--mono);
+  font-family: var(--sans);
   min-height: 100vh;
   position: relative;
 }
@@ -45,12 +49,17 @@ body {
 
 .app-header {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: space-between;
-  padding: 22px 32px;
-  flex-wrap: wrap;
-  gap: 12px;
-  border-bottom: 1px solid var(--line);
+  justify-content: flex-start;
+  position: fixed;
+  inset: 0 auto 0 0;
+  width: 184px;
+  padding: 28px 16px;
+  gap: 32px;
+  border-right: 1px solid var(--line);
+  background: rgba(19, 25, 35, 0.94);
+  z-index: 1;
 }
 
 .brand {
@@ -69,39 +78,44 @@ body {
 }
 
 .app-header h1 {
-  font-size: 15px;
+  font-size: 12px;
   font-weight: 700;
   margin: 0;
-  letter-spacing: 0.28em;
+  letter-spacing: 0.16em;
   color: var(--text);
 }
 
 .tabs {
   display: flex;
-  border: 1px solid var(--line);
+  flex-direction: column;
+  width: 100%;
+  border: 0;
 }
 
 .tab {
-  font-family: var(--mono);
+  font-family: var(--sans);
   border: none;
   background: transparent;
-  padding: 8px 18px;
-  font-size: 11px;
+  padding: 11px 12px;
+  font-size: 12px;
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
+  text-align: left;
+  text-transform: none;
+  letter-spacing: 0.02em;
   color: var(--text-dim);
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease;
 }
 
 .tab + .tab {
-  border-left: 1px solid var(--line);
+  border-left: 0;
+  border-top: 1px solid var(--line);
 }
 
 .tab.active {
-  background: var(--cyan);
-  color: var(--void);
+  background: rgba(112, 198, 178, 0.14);
+  color: var(--success);
+  box-shadow: inset 3px 0 0 var(--success);
 }
 
 .tab:hover:not(.active) {
@@ -112,14 +126,131 @@ body {
 /* --- Layout --- */
 
 main {
-  padding: 28px 32px 48px;
-  max-width: 860px;
-  margin: 0 auto;
+  padding: 36px 40px 48px;
+  max-width: 1280px;
+  margin: 0 0 0 184px;
 }
 
 .view.hidden {
   display: none;
 }
+
+/* --- Deliveries --- */
+
+.delivery-layout {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.65fr) minmax(0, 1.35fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.delivery-list-panel,
+.delivery-workspace { margin: 0; }
+
+.delivery-list-header,
+.delivery-detail-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.delivery-list-header h2,
+.delivery-detail-header h2 {
+  margin: 2px 0 0;
+  font-size: 22px;
+  line-height: 1.2;
+  letter-spacing: -0.03em;
+}
+
+.eyebrow {
+  margin: 0;
+  color: var(--neutral);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.delivery-list-entry {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px 12px;
+  margin: 8px 0;
+  padding: 13px;
+  text-align: left;
+  border-color: var(--line);
+}
+
+.delivery-list-entry strong {
+  min-width: 0;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.delivery-list-entry .technical-value {
+  grid-column: 1 / -1;
+  color: var(--text-dim);
+}
+
+.delivery-list-entry.active {
+  border-color: var(--success);
+  background: rgba(112, 198, 178, 0.08);
+}
+
+.delivery-status {
+  align-self: start;
+  color: var(--neutral);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.delivery-detail-header {
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.delivery-detail-header .helper-text { margin: 7px 0 0; }
+.delivery-status-note { align-self: end; margin: 0 0 6px; }
+.delivery-timeline-section { margin-top: 28px; }
+
+.delivery-event {
+  position: relative;
+  padding: 0 0 16px 18px;
+  border-left: 1px solid var(--line);
+}
+
+.delivery-event::before {
+  content: '';
+  position: absolute;
+  top: 4px;
+  left: -4px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--success);
+}
+
+.delivery-event p {
+  margin: 5px 0;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.technical-value {
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+#delivery-repo-path,
+#delivery-branch,
+#delivery-base-branch { font-family: var(--mono); }
 
 .panel {
   position: relative;
@@ -221,7 +352,7 @@ label:first-of-type {
 
 input[type="text"], input[type="number"], input[type="date"], select, textarea {
   width: 100%;
-  font-family: var(--mono);
+  font-family: var(--sans);
   font-size: 13px;
   color: var(--text);
   padding: 9px 11px;
@@ -359,11 +490,11 @@ input[type="checkbox"] {
 }
 
 button {
-  font-family: var(--mono);
+  font-family: var(--sans);
   font-size: 11px;
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
+  text-transform: none;
+  letter-spacing: 0.01em;
   padding: 10px 18px;
   background: transparent;
   border: 1px solid var(--cyan-dim);
@@ -811,12 +942,30 @@ button.primary:hover:not(:disabled) {
 @media (max-width: 640px) {
   main {
     padding: 20px 16px 40px;
+    margin: 0;
   }
   .app-header {
+    position: static;
+    width: auto;
+    flex-direction: row;
+    justify-content: space-between;
     padding: 18px 16px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
   }
+  .tabs { flex-direction: row; width: auto; }
+  .tab { padding: 8px 9px; font-size: 11px; }
+  .tab + .tab { border-top: 0; border-left: 1px solid var(--line); }
   .row {
     flex-direction: column;
     align-items: stretch;
   }
+  .delivery-layout { grid-template-columns: 1fr; }
+  .delivery-list-header h2, .delivery-detail-header h2 { font-size: 20px; }
+}
+
+@media (min-width: 641px) and (max-width: 900px) {
+  .app-header { width: 154px; }
+  main { margin-left: 154px; padding: 28px; }
+  .delivery-layout { grid-template-columns: 1fr; }
 }
