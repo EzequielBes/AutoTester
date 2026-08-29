@@ -302,6 +302,38 @@ test('deliveries:confirm-chain rejects an untrusted renderer', () => {
   assert.throws(() => handlers.get('deliveries:confirm-chain')({ sender: {} }, []), /untrusted renderer/);
 });
 
+test('deliveries:confirm-chain rejects invalid entries without changing any delivery', () => {
+  const { handlers, deliveriesPath } = setup();
+  const first = handlers.get('deliveries:save')({ sender: {} }, draft({ objective: 'First' }));
+  const second = handlers.get('deliveries:save')({ sender: {} }, draft({ objective: 'Second', branch: 'feature/second' }));
+  const invalid = [
+    { deliveryId: first.id, chainId: 'chain-1', position: 0, dependsOn: [second.id] },
+    { deliveryId: second.id, chainId: 'chain-1', position: 1, dependsOn: [first.id] }
+  ];
+  assert.throws(() => handlers.get('deliveries:confirm-chain')({ sender: {} }, invalid), /precede/);
+  assert.ok(readDeliveries(deliveriesPath).every((delivery) => !delivery.chain));
+});
+
+test('deliveries:confirm-chain validates a complete topological chain atomically', () => {
+  const { handlers, deliveriesPath } = setup();
+  const first = handlers.get('deliveries:save')({ sender: {} }, draft({ objective: 'First' }));
+  const second = handlers.get('deliveries:save')({ sender: {} }, draft({ objective: 'Second', branch: 'feature/second' }));
+  const result = handlers.get('deliveries:confirm-chain')({ sender: {} }, [
+    { deliveryId: first.id, chainId: 'chain-1', position: 0, dependsOn: [] },
+    { deliveryId: second.id, chainId: 'chain-1', position: 1, dependsOn: [first.id] }
+  ]);
+  assert.deepEqual(result.map((delivery) => delivery.id).sort(), [first.id, second.id].sort());
+  assert.equal(result.find((delivery) => delivery.id === second.id).chain.dependsOn[0], first.id);
+  assert.ok(readDeliveries(deliveriesPath).every((delivery) => delivery.events.some((event) => event.kind === 'chain-confirmed')));
+});
+
+test('deliveries:suggest-chain rejects duplicate or unknown delivery ids', async () => {
+  const { handlers } = setup();
+  const saved = handlers.get('deliveries:save')({ sender: {} }, draft());
+  await assert.rejects(handlers.get('deliveries:suggest-chain')({ sender: {} }, [saved.id, saved.id]), /unique delivery ids/);
+  await assert.rejects(handlers.get('deliveries:suggest-chain')({ sender: {} }, ['missing']), /unknown delivery/);
+});
+
 test('deliveries:save preserves a confirmed chain and flow snapshot on a later edit', () => {
   const { handlers, deliveriesPath } = setup({
     policies: [{ id: 'policy-1', path: 'AGENTS.md', excerpt: 'Follow the rules.' }]

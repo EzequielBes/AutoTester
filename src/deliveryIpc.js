@@ -70,6 +70,44 @@ function azureFailureDetail(error) {
   return `Azure sync failed (${code})`;
 }
 
+function validateChainEntries(entries, deliveries) {
+  if (!Array.isArray(entries) || entries.length === 0) throw new Error('chain entries must not be empty');
+  const knownIds = new Set(deliveries.map((delivery) => delivery.id));
+  const ids = new Set();
+  const positions = new Set();
+  let chainId = null;
+  entries.forEach((entry) => {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) throw new Error('chain entry must be an object');
+    if (typeof entry.deliveryId !== 'string' || !knownIds.has(entry.deliveryId)) throw new Error('chain entry references an unknown delivery');
+    if (ids.has(entry.deliveryId)) throw new Error('chain entries must contain each delivery only once');
+    ids.add(entry.deliveryId);
+    if (typeof entry.chainId !== 'string' || entry.chainId.length === 0) throw new Error('chain entry chainId must be a non-empty string');
+    if (chainId && entry.chainId !== chainId) throw new Error('chain entries must share the same chainId');
+    chainId = entry.chainId;
+    if (!Number.isInteger(entry.position) || entry.position < 0 || positions.has(entry.position)) {
+      throw new Error('chain entry positions must be unique non-negative integers');
+    }
+    positions.add(entry.position);
+    if (!Array.isArray(entry.dependsOn) || entry.dependsOn.some((id) => typeof id !== 'string' || !knownIds.has(id))) {
+      throw new Error('chain entry dependsOn must contain known delivery ids');
+    }
+    if (new Set(entry.dependsOn).size !== entry.dependsOn.length) throw new Error('chain entry dependsOn must not contain duplicates');
+    if (entry.dependsOn.includes(entry.deliveryId)) throw new Error('chain entry must not depend on itself');
+  });
+  for (let position = 0; position < entries.length; position += 1) {
+    if (!positions.has(position)) throw new Error('chain entry positions must start at zero without gaps');
+  }
+  const byId = new Map(entries.map((entry) => [entry.deliveryId, entry]));
+  entries.forEach((entry) => {
+    entry.dependsOn.forEach((dependencyId) => {
+      const dependency = byId.get(dependencyId);
+      if (!dependency) throw new Error('chain dependencies must be included in the confirmed chain');
+      if (dependency.position >= entry.position) throw new Error('chain dependencies must precede their delivery');
+    });
+  });
+  return byId;
+}
+
 function registerDeliveryIpc(ipcMain, {
   deliveriesFilePath,
   projectPoliciesFilePath,
@@ -149,25 +187,31 @@ function registerDeliveryIpc(ipcMain, {
 
   ipcMain.handle('deliveries:suggest-chain', async (event, deliveryIds) => {
     assertTrustedRenderer(event);
-    return suggestChainImpl(Array.isArray(deliveryIds) ? deliveryIds : []);
+    if (!Array.isArray(deliveryIds) || deliveryIds.length === 0 || new Set(deliveryIds).size !== deliveryIds.length) {
+      throw new Error('chain suggestion requires unique delivery ids');
+    }
+    const knownIds = new Set(readDeliveries(deliveriesFilePath()).map((delivery) => delivery.id));
+    if (deliveryIds.some((id) => typeof id !== 'string' || !knownIds.has(id))) {
+      throw new Error('chain suggestion references an unknown delivery');
+    }
+    return suggestChainImpl(deliveryIds);
   });
 
   ipcMain.handle('deliveries:confirm-chain', (event, entries) => {
     assertTrustedRenderer(event);
-    if (!Array.isArray(entries)) throw new Error('chain entries must be an array');
     const deliveries = readDeliveries(deliveriesFilePath());
     const confirmedAt = new Date().toISOString();
-    const byId = new Map(entries.map((entry) => [entry.deliveryId, entry]));
+    const byId = validateChainEntries(entries, deliveries);
     const next = deliveries.map((delivery) => {
       const entry = byId.get(delivery.id);
       if (!entry) return delivery;
-      return {
+      return appendEvent({
         ...delivery,
         chain: { chainId: entry.chainId, position: entry.position, dependsOn: entry.dependsOn || [], confirmedAt }
-      };
+      }, { kind: 'chain-confirmed', detail: `Delivery chain confirmed at position ${entry.position}.` });
     });
     return writeDeliveries(deliveriesFilePath(), next).filter((item) => byId.has(item.id));
   });
 }
 
-module.exports = { azureFailureDetail, registerDeliveryIpc };
+module.exports = { azureFailureDetail, validateChainEntries, registerDeliveryIpc };
