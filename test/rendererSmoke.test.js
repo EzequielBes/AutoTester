@@ -23,4 +23,5 @@ test('renderer smoke flow manages deliveries, validation execution, and history'
   assert.equal(result.trackCanWrite, true);
   assert.equal(result.trackCancelled, true);
   assert.equal(result.historyExported, true);
+  assert.equal(result.resumed, true);
 });

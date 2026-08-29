@@ -75,7 +75,7 @@ O principio central e que a automacao produz evidencia, mas nao muda o codigo so
 - Distribuicoes ainda usam icone padrao do Electron e nao possuem assinatura de codigo.
 - Versionamento semantico, changelog e procedimento de release documentados em `docs/releases.md`.
 - Entregas possuem escopo, excecoes auditaveis e permissao de escrita por fase preservada no snapshot. O executor atual nao realiza escrita automatica de codigo.
-- Smoke test Electron em janela oculta cobre criacao de Entrega, Excecao de escopo, configuracao de permissao de escrita, cancelamento de Trilha e exportacao do historico.
+- Smoke test Electron em janela oculta cobre criacao e retomada de Entrega, Excecao de escopo, configuracao de permissao de escrita, cancelamento de Trilha e exportacao do historico.
 
 ## Proximos Marcos
 

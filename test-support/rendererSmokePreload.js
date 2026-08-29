@@ -1,7 +1,8 @@
 'use strict';
 
-const deliveries = [];
-let tracks = [];
+const storedState = JSON.parse(window.sessionStorage.getItem('renderer-smoke-state') || '{}');
+let deliveries = storedState.deliveries || [];
+let tracks = storedState.tracks || [];
 let pendingTrackRun = null;
 const agentProfiles = [{ id: 'claude', name: 'Claude padrao', runtime: 'claude', instructions: '' }];
 const qualitySkills = [{ id: 'general', name: 'Review geral', baseSkill: 'general', instructions: '', canApply: true }];
@@ -10,6 +11,10 @@ const history = [{
   branch: 'feature/renderer-smoke', files: ['src/deliveryStore.js'], skill: 'general', intensity: 'full',
   findingsCount: 0, acceptedCount: 0, findings: []
 }];
+
+function persistState() {
+  window.sessionStorage.setItem('renderer-smoke-state', JSON.stringify({ deliveries, tracks }));
+}
 
 function deliveryDefaults(draft, existing) {
   return {
@@ -36,6 +41,7 @@ const api = {
     const index = deliveries.findIndex((delivery) => delivery.id === draft.id);
     const saved = deliveryDefaults(draft, index >= 0 ? deliveries[index] : null);
     if (index >= 0) deliveries[index] = saved; else deliveries.push(saved);
+    persistState();
     return saved;
   },
   recordDeliveryScopeException: async ({ deliveryId, exception }) => {
@@ -43,6 +49,7 @@ const api = {
     const recorded = { id: `exception-${delivery.scopeExceptions.length + 1}`, ...exception, createdAt: '2026-08-29T00:00:00.000Z' };
     delivery.scopeExceptions.push(recorded);
     delivery.events.push({ id: recorded.id, timestamp: recorded.createdAt, kind: 'scope-exception', detail: 'Scope exception recorded.' });
+    persistState();
     return delivery;
   },
   listProjectPolicies: async () => [],
@@ -50,6 +57,7 @@ const api = {
   saveValidationTrack: async (track) => {
     const saved = { ...track, id: track.id || `track-${tracks.length + 1}` };
     tracks = [...tracks.filter((item) => item.id !== saved.id), saved];
+    persistState();
     return saved;
   },
   listAgentProfiles: async () => agentProfiles,

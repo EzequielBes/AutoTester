@@ -16,6 +16,7 @@ async function main() {
       nodeIntegration: false
     }
   });
+  await window.webContents.session.clearStorageData();
   await window.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
   const result = await window.webContents.executeJavaScript(`
     (async () => {
@@ -88,7 +89,19 @@ async function main() {
       };
     })()
   `);
-  process.stdout.write(`RESULT:${JSON.stringify(result)}\n`);
+  const reloaded = new Promise((resolve) => window.webContents.once('did-finish-load', resolve));
+  window.webContents.reload();
+  await reloaded;
+  const resumed = await window.webContents.executeJavaScript(`
+    (async () => {
+      for (let attempt = 0; attempt < 50; attempt += 1) {
+        if (document.getElementById('delivery-list').textContent.includes('Validar fluxo da interface')) return true;
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      return false;
+    })()
+  `);
+  process.stdout.write(`RESULT:${JSON.stringify({ ...result, resumed })}\n`);
   await window.close();
   app.quit();
 }
