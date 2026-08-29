@@ -160,7 +160,8 @@ test('builds a flow snapshot from current policy, track, profile and skill recor
       agent: 'claude',
       skill: 'security',
       intensity: 'full',
-      criteria: 'Check authorization.'
+      criteria: 'Check authorization.',
+      canWrite: true
     }]
   };
   const profile = { id: 'custom-agent', name: 'Custom agent', runtime: 'claude', instructions: 'Be careful.' };
@@ -210,7 +211,8 @@ test('flow snapshot is a deep copy that does not change when the source records 
       agent: 'claude',
       skill: 'security',
       intensity: 'full',
-      criteria: 'Check authorization.'
+      criteria: 'Check authorization.',
+      canWrite: false
     }]
   };
 

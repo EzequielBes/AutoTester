@@ -43,6 +43,7 @@ O principio central e que a automacao produz evidencia, mas nao muda o codigo so
 - Build Windows NSIS em `release/AutoTester Setup <versao>.exe`.
 - Configuracao AppImage para Linux via `npm run dist:linux`.
 - Descoberta de VS Code no Windows, Linux e macOS (`code` ou `code-insiders`).
+- GitHub Actions valida `npm test` em Windows e Linux a cada PR e push em `main`, e produz artefatos nativos em execucao manual ou release publicada.
 
 ### Entregas: Fundacao
 
@@ -68,40 +69,30 @@ O principio central e que a automacao produz evidencia, mas nao muda o codigo so
 
 ## Estado Atual
 
-- Suite Node: 214 testes aprovados na ultima execucao completa.
+- Suite Node: 229 testes aprovados na ultima execucao completa.
 - Build Windows: validado com `npm run pack` e `npm run dist`.
-- AppImage Linux: configurado, mas deve ser gerado em Linux ou CI. O host Windows atual nao tem privilegio de symlink, WSL de usuario ou Docker ativo para validar esse artefato nativamente.
+- AppImage Linux: configurado e produzido por runner Linux no GitHub Actions. O host Windows atual nao tem privilegio de symlink, WSL de usuario ou Docker ativo para validar esse artefato nativamente.
 - Distribuicoes ainda usam icone padrao do Electron e nao possuem assinatura de codigo.
-- Entregas ainda nao possuem Escopo ou Exceção de escopo — ver Proximos Marcos.
+- Versionamento semantico, changelog e procedimento de release documentados em `docs/releases.md`.
+- Entregas possuem escopo, excecoes auditaveis e permissao de escrita por fase preservada no snapshot. O executor atual nao realiza escrita automatica de codigo.
+- Smoke test Electron em janela oculta cobre criacao de Entrega, Excecao de escopo e configuracao de permissao de escrita na Trilha.
 
 ## Proximos Marcos
 
-### 1. Entregas: Escopo e Exceção
-
-- Escopo de Entrega por arquivos, pastas e glob; Guardiao de escopo compara mudancas antes de uma fase com escrita automatica aplicar.
-- Registro de Exceção de escopo com arquivos afetados, justificativa, agente/fase responsavel e data; sem essa informacao a fase nao conclui como aprovada.
-- Permissao de escrita como propriedade explicita da fase, copiada para o snapshot da execucao.
-
-### 2. CI Multiplataforma
-
-- Criar workflow GitHub Actions para rodar `npm test` em Windows e Linux.
-- Produzir o instalador NSIS e o AppImage em runners nativos.
-- Publicar artefatos anexados a cada release ou execucao manual.
-
-### 3. Release Profissional
+### 1. Release Profissional
 
 - Adicionar icone proprio para Windows e Linux.
-- Definir versionamento semantico, changelog e notas de release.
 - Configurar assinatura de codigo Windows para reduzir avisos do SmartScreen.
 
-### 4. Validacao de Interface
+### 2. Validacao de Interface
 
 - Cobrir fluxos Electron completos: criar Entrega, executar Fluxo, retomar em outra sessao, registrar Exceção, criar trilha, executar, cancelar, abrir historico e exportar.
 - Exercitar a instalacao e primeira execucao dos artefatos Windows e Linux em ambientes limpos.
 
-### 5. Evolucao de Produto
+### 3. Evolucao de Produto
 
 - Avaliar novos runtimes de agentes apenas quando houver adaptadores reais e testaveis.
+- Antes de habilitar escrita automatica, integrar o Guardiao de escopo a uma fase que compare as mudancas e exija Excecao antes de concluir.
 - Avaliar redacao opcional de logs antes de permitir a persistencia opt-in.
 - Definir politica de backup ou exportacao periodica do historico para equipes que precisem de retencao longa.
 

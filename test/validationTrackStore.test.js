@@ -39,10 +39,12 @@ test('returns no tracks before the store exists', () => {
 test('writes a versioned track store and reads it back', () => {
   const file = tmpFile();
   const tracks = [track()];
-  writeValidationTracks(file, tracks);
+  const storedTracks = writeValidationTracks(file, tracks);
 
-  assert.deepEqual(readValidationTracks(file), tracks);
-  assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).version, 3);
+  assert.deepEqual(readValidationTracks(file), storedTracks);
+  const stored = JSON.parse(fs.readFileSync(file, 'utf8'));
+  assert.equal(stored.version, 4);
+  assert.equal(stored.tracks[0].phases[0].canWrite, false);
 });
 
 test('accepts a profile id and rejects a missing phase agent id', () => {
@@ -86,6 +88,16 @@ test('rejects a Claude phase with a non-boolean parallel setting', () => {
   const invalid = track();
   invalid.phases[0].parallel = 'yes';
   assert.throws(() => validateTrack(invalid), /parallel must be a boolean/);
+});
+
+test('rejects malformed write permission and migrates legacy phases with writing disabled', () => {
+  const invalid = track();
+  invalid.phases[0].canWrite = 'yes';
+  assert.throws(() => validateTrack(invalid), /canWrite must be a boolean/);
+
+  const file = tmpFile();
+  fs.writeFileSync(file, JSON.stringify({ version: 3, tracks: [track()] }));
+  assert.equal(readValidationTracks(file)[0].phases[0].canWrite, false);
 });
 
 test('rejects a coverage gate without an LCOV path', () => {

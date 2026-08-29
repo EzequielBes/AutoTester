@@ -4,7 +4,7 @@ Uma trilha e uma sequencia de fases locais.
 
 ## Fases Claude
 
-Uma fase Claude combina perfil de agente, skill, intensidade e criterios adicionais. Skills nativas incluem revisao, seguranca, testes, diagnostico, escopo e prontidao de merge. Skills personalizadas usam uma das bases existentes e acrescentam instrucoes.
+Uma fase Claude combina perfil de agente, skill, intensidade, criterios adicionais e permissao explicita de escrita automatica. A permissao inicia desabilitada, e o snapshot de uma Entrega preserva seu valor. O executor atual continua somente de leitura. Skills nativas incluem revisao, seguranca, testes, diagnostico, escopo e prontidao de merge. Skills personalizadas usam uma das bases existentes e acrescentam instrucoes.
 
 Marque fases independentes como paralelas para executa-las em lotes de ate dois subagentes. Uma falha termina o lote atual e bloqueia as fases posteriores.
 

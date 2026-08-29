@@ -1103,6 +1103,16 @@ function createPhaseEditor(phase = {}) {
   parallelInput.checked = phase.parallel === true;
   parallelLabel.appendChild(parallelInput);
   claudeFields.appendChild(parallelLabel);
+
+  const canWriteLabel = document.createElement('label');
+  canWriteLabel.className = 'checkbox-label';
+  canWriteLabel.textContent = 'Permitir escrita automática no escopo da Entrega';
+  const canWriteInput = document.createElement('input');
+  canWriteInput.type = 'checkbox';
+  canWriteInput.className = 'phase-can-write';
+  canWriteInput.checked = phase.canWrite === true;
+  canWriteLabel.appendChild(canWriteInput);
+  claudeFields.appendChild(canWriteLabel);
   editor.appendChild(claudeFields);
 
   const commandFields = document.createElement('div');
@@ -1439,7 +1449,8 @@ function getTrackDraft() {
       skill: editor.querySelector('.phase-skill').value,
       intensity: editor.querySelector('.phase-intensity').value,
       criteria: editor.querySelector('.phase-criteria').value.trim(),
-      parallel: editor.querySelector('.phase-parallel').checked
+      parallel: editor.querySelector('.phase-parallel').checked,
+      canWrite: editor.querySelector('.phase-can-write').checked
     };
   });
   return { id: editingTrackId, name: document.getElementById('track-name').value.trim(), phases };

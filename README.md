@@ -14,6 +14,7 @@ Aplicação Electron local para transformar feature work em **Entregas** rastre�
 - [Uso](#uso)
 - [Testes](#testes)
 - [Build](#build)
+- [Releases](#releases)
 - [Arquitetura](#arquitetura)
 - [Documentação](#documentação)
 - [Notas técnicas](#notas-técnicas)
@@ -81,7 +82,7 @@ A tela inicial é **Entregas**. Crie uma, vincule a uma branch e base, descubra 
 npm test
 ```
 
-Suite Node built-in test runner, sem dependências externas de teste.
+Suite Node built-in test runner, sem dependências externas de teste. Inclui um smoke test Electron em janela oculta para os fluxos essenciais da interface.
 
 ## Build
 
@@ -102,6 +103,10 @@ npm run dist:linux   # gera um AppImage em release/
 
 O AppImage exige um runtime compatível com FUSE em muitas distribuições. Gere-o em Linux ou CI — builds cruzados a partir do Windows exigem Modo de Desenvolvedor ou privilégio elevado de symlink.
 
+## Releases
+
+O projeto usa versionamento semântico. O procedimento de publicação, changelog e limitações atuais de assinatura e ícones estão em [`docs/releases.md`](docs/releases.md).
+
 ## Arquitetura
 
 Três camadas: `renderer/` (interface, sem Node integration), `preload.js` (API IPC explícita e limitada) e `main.js`/`src/` (Git, filesystem, Claude CLI, execução, persistência). Detalhes completos, modelo de segurança de contexto e política de persistência em [`docs/architecture.md`](docs/architecture.md).
@@ -113,6 +118,7 @@ Três camadas: `renderer/` (interface, sem Node integration), `preload.js` (API 
 | [`docs/roadmap.md`](docs/roadmap.md) | Objetivo do sistema, entregas concluídas, estado atual, próximos marcos. |
 | [`docs/architecture.md`](docs/architecture.md) | Camadas, segurança de contexto, persistência, execução. |
 | [`docs/validation-tracks.md`](docs/validation-tracks.md) | Modelo de Trilhas de Validação e seus limites operacionais. |
+| [`docs/releases.md`](docs/releases.md) | Versionamento, changelog e publicação de releases. |
 | [`CONTEXT.md`](CONTEXT.md) | Vocabulário de domínio: Entrega, Cadeia, Política, Agente de fluxo, Escopo. |
 
 ## Notas técnicas

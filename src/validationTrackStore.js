@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { INTENSITY_HEADINGS } = require('./promptBuilder');
 
-const STORE_VERSION = 3;
+const STORE_VERSION = 4;
 const MAX_NAME_LENGTH = 100;
 const MAX_CRITERIA_LENGTH = 2000;
 const MAX_COMMAND_LENGTH = 2000;
@@ -34,6 +34,9 @@ function validateClaudePhase(phase) {
   validateText(phase.criteria, 'phase.criteria', { maxLength: MAX_CRITERIA_LENGTH });
   if (phase.parallel !== undefined && typeof phase.parallel !== 'boolean') {
     throw new Error('phase.parallel must be a boolean');
+  }
+  if (phase.canWrite !== undefined && typeof phase.canWrite !== 'boolean') {
+    throw new Error('phase.canWrite must be a boolean');
   }
 }
 
@@ -95,17 +98,30 @@ function validateTrack(track) {
 }
 
 function migrateV1Track(track) {
-  return {
+  return normalizeWritePermissions({
     ...track,
     phases: track.phases.map((phase) => ({ ...phase, type: 'claude' }))
-  };
+  });
 }
 
 function migrateV2Track(track) {
-  return {
+  return normalizeWritePermissions({
     ...track,
     phases: track.phases.map((phase) => phase.type === 'command' ? { ...phase, coverageGate: phase.coverageGate || null } : phase)
+  });
+}
+
+function normalizeWritePermissions(track) {
+  return {
+    ...track,
+    phases: track.phases.map((phase) => phase.type === 'claude'
+      ? { ...phase, canWrite: phase.canWrite === true }
+      : phase)
   };
+}
+
+function migrateV3Track(track) {
+  return normalizeWritePermissions(track);
 }
 
 function readValidationTracks(filePath) {
@@ -122,7 +138,8 @@ function readValidationTracks(filePath) {
   const tracks = data.version === 1
     ? data.tracks.map(migrateV1Track)
     : data.version === 2 ? data.tracks.map(migrateV2Track)
-    : data.version === STORE_VERSION ? data.tracks : null;
+      : data.version === 3 ? data.tracks.map(migrateV3Track)
+        : data.version === STORE_VERSION ? data.tracks.map(normalizeWritePermissions) : null;
   if (!tracks) throw new Error('validation track storage has an unsupported schema');
   tracks.forEach(validateTrack);
   return tracks;
@@ -130,10 +147,11 @@ function readValidationTracks(filePath) {
 
 function writeValidationTracks(filePath, tracks) {
   tracks.forEach(validateTrack);
+  const normalizedTracks = tracks.map(normalizeWritePermissions);
   const temporaryPath = path.join(path.dirname(filePath), `.${path.basename(filePath)}.${process.pid}.tmp`);
-  fs.writeFileSync(temporaryPath, JSON.stringify({ version: STORE_VERSION, tracks }, null, 2));
+  fs.writeFileSync(temporaryPath, JSON.stringify({ version: STORE_VERSION, tracks: normalizedTracks }, null, 2));
   fs.renameSync(temporaryPath, filePath);
-  return tracks;
+  return normalizedTracks;
 }
 
 module.exports = {
