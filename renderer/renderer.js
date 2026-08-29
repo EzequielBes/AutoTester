@@ -293,6 +293,7 @@ function renderDeliveryDetail(delivery) {
   document.getElementById('delivery-flow-status').textContent = '';
   rejectChainSuggestion();
   document.getElementById('delivery-sync-status').textContent = '';
+  renderAzureSummary(delivery.azureSync);
   renderInconsistencyList(delivery);
   renderChainConfirmed(delivery);
 }
@@ -327,6 +328,7 @@ function renderDeliveryEditor(delivery) {
     document.getElementById('delivery-flow-status').textContent = 'Salve a entrega antes de configurar o fluxo.';
     rejectChainSuggestion();
     document.getElementById('delivery-sync-status').textContent = '';
+    renderAzureSummary(null);
     renderInconsistencyList({ events: [] });
     renderChainConfirmed({ chain: null });
   }
@@ -590,6 +592,26 @@ function renderInconsistencyList(delivery) {
     item.append(timestamp, detail);
     list.appendChild(item);
   });
+}
+
+function renderAzureSummary(azureSync) {
+  const container = document.getElementById('delivery-azure-summary');
+  container.textContent = '';
+  if (!azureSync) return;
+  const envelope = azureSync.envelope;
+  const syncedAt = document.createElement('p');
+  syncedAt.textContent = `Azure sincronizado em ${new Date(azureSync.syncedAt).toLocaleString('pt-BR')}.`;
+  const repository = document.createElement('p');
+  repository.textContent = `Repositório Azure: ${envelope.repository} · branch ${envelope.branch}`;
+  container.append(syncedAt, repository);
+  if (envelope.pullRequest) {
+    const pr = document.createElement('p');
+    pr.textContent = `PR #${envelope.pullRequest.id}: ${envelope.pullRequest.title} (${envelope.pullRequest.status}) → ${envelope.pullRequest.targetBranch}`;
+    container.appendChild(pr);
+  }
+  const related = document.createElement('p');
+  related.textContent = `${envelope.reviewers.length} revisor(es) e ${envelope.workItems.length} work item(s).`;
+  container.appendChild(related);
 }
 
 function renderChainConfirmed(delivery) {

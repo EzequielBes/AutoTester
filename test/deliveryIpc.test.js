@@ -226,27 +226,31 @@ test('rejects an unknown delivery id when building a flow snapshot', () => {
 
 test('deliveries:sync-azure records an inconsistency event when the Azure connector fails, without throwing', async () => {
   const { handlers } = setup({
-    runAzureSync: async () => { const error = new Error('timed out'); error.code = 'AZURE_MCP_TIMEOUT'; throw error; }
+    runAzureSync: async () => { const error = new Error('token super-secret leaked'); error.code = 'AZURE_MCP_TIMEOUT'; throw error; }
   });
   const saved = handlers.get('deliveries:save')({ sender: {} }, draft());
   const result = await handlers.get('deliveries:sync-azure')({ sender: {} }, saved.id);
   assert.equal(result.id, saved.id);
   assert.equal(result.events.length, 1);
   assert.equal(result.events[0].kind, 'inconsistency');
-  assert.match(result.events[0].detail, /timed out|AZURE_MCP_TIMEOUT/);
+  assert.match(result.events[0].detail, /AZURE_MCP_TIMEOUT/);
+  assert.equal(result.events[0].detail.includes('super-secret'), false);
 });
 
-test('deliveries:sync-azure records no inconsistency event on a clean, matching sync', async () => {
+test('deliveries:sync-azure persists only the safe Azure projection and records the sync', async () => {
   const { handlers } = setup({
     runAzureSync: async () => ({
       repository: 'org/repo', branch: draft().branch, pullRequest: { id: '1', title: 'PR', status: 'active', targetBranch: 'Dev', url: 'https://example.test/pr/1' },
-      reviewers: [], workItems: [], fetchedAt: '2026-08-28T12:00:00.000Z'
+      reviewers: [], workItems: [], fetchedAt: '2026-08-28T12:00:00.000Z', accessToken: 'secret'
     }),
     detectInconsistencies: () => []
   });
   const saved = handlers.get('deliveries:save')({ sender: {} }, draft());
   const result = await handlers.get('deliveries:sync-azure')({ sender: {} }, saved.id);
-  assert.equal(result.events.length, 0);
+  assert.equal(result.events.length, 1);
+  assert.equal(result.events[0].kind, 'azure-sync');
+  assert.equal(result.azureSync.envelope.pullRequest.id, '1');
+  assert.equal('accessToken' in result.azureSync.envelope, false);
 });
 
 test('deliveries:sync-azure rejects when the delivery does not exist', async () => {
@@ -255,17 +259,16 @@ test('deliveries:sync-azure rejects when the delivery does not exist', async () 
 });
 
 test('deliveries:sync-azure runs the Azure query against the delivery\'s own repo path', async () => {
-  let receivedPrompt;
+  let receivedRequest;
   let receivedOptions;
   const { handlers } = setup({
-    runAzureSync: async (prompt, options) => { receivedPrompt = prompt; receivedOptions = options; return {}; }
+    runAzureSync: async (request, options) => { receivedRequest = request; receivedOptions = options; return {}; }
   });
   const saved = handlers.get('deliveries:save')({ sender: {} }, draft({ repoPath: '/work/repository' }));
   await handlers.get('deliveries:sync-azure')({ sender: {} }, saved.id);
 
   assert.equal(receivedOptions.cwd, '/work/repository');
-  assert.match(receivedPrompt, /\/work\/repository/);
-  assert.match(receivedPrompt, /feature\/delivery-ipc/);
+  assert.deepEqual(receivedRequest, { branch: 'feature/delivery-ipc' });
 });
 
 test('deliveries:suggest-chain returns a suggestion without persisting it', async () => {

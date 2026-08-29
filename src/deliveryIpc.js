@@ -6,6 +6,7 @@ const { readProjectPolicies } = require('./projectPolicyStore');
 const { readValidationTracks } = require('./validationTrackStore');
 const { readAgentProfiles } = require('./agentProfileStore');
 const { readQualitySkills } = require('./qualitySkillStore');
+const { projectAzureEnvelope } = require('./azureEnvelopeSchema');
 
 function buildDeliveryFromDraft(draft, existing) {
   if (!draft || typeof draft !== 'object' || Array.isArray(draft)) {
@@ -29,7 +30,8 @@ function buildDeliveryFromDraft(draft, existing) {
     updatedAt,
     events: existing ? existing.events : [],
     flowSnapshot: existing ? existing.flowSnapshot : null,
-    chain: existing ? existing.chain : null
+    chain: existing ? existing.chain : null,
+    azureSync: existing ? existing.azureSync : null
   };
 }
 
@@ -49,10 +51,23 @@ function buildFlowSnapshot(selection = {}, records) {
 }
 
 function appendEvent(delivery, { kind, detail }) {
+  const now = new Date();
+  const previousUpdatedAt = new Date(delivery.updatedAt);
+  const updatedAt = now <= previousUpdatedAt
+    ? new Date(previousUpdatedAt.getTime() + 1).toISOString()
+    : now.toISOString();
   return {
     ...delivery,
+    updatedAt,
     events: [...delivery.events, { id: crypto.randomUUID(), timestamp: new Date().toISOString(), kind, detail }]
   };
+}
+
+function azureFailureDetail(error) {
+  const code = typeof error?.code === 'string' && /^AZURE_MCP_[A-Z_]+$/.test(error.code)
+    ? error.code
+    : 'AZURE_MCP_FAILED';
+  return `Azure sync failed (${code})`;
 }
 
 function registerDeliveryIpc(ipcMain, {
@@ -111,16 +126,20 @@ function registerDeliveryIpc(ipcMain, {
 
     let updated = existing;
     try {
-      const envelope = await runAzureSync(
-        `Fetch Azure DevOps metadata for the repository at "${existing.repoPath}", branch "${existing.branch}".`,
+      const envelope = projectAzureEnvelope(await runAzureSync(
+        { branch: existing.branch },
         { cwd: existing.repoPath }
-      );
-      const inconsistencies = detectInconsistencies(existing, { azureEnvelope: envelope, allDeliveries: deliveries });
+      ));
+      updated = appendEvent({
+        ...updated,
+        azureSync: { envelope, syncedAt: new Date().toISOString() }
+      }, { kind: 'azure-sync', detail: 'Azure metadata synchronized.' });
+      const inconsistencies = detectInconsistencies(updated, { azureEnvelope: envelope, allDeliveries: deliveries });
       inconsistencies.forEach((item) => {
         updated = appendEvent(updated, { kind: 'inconsistency', detail: `${item.evidence} — ${item.recommendedAction}` });
       });
     } catch (error) {
-      updated = appendEvent(updated, { kind: 'inconsistency', detail: `Azure sync failed: ${error.message}` });
+      updated = appendEvent(updated, { kind: 'inconsistency', detail: azureFailureDetail(error) });
     }
 
     if (updated === existing) return existing;
@@ -151,4 +170,4 @@ function registerDeliveryIpc(ipcMain, {
   });
 }
 
-module.exports = { registerDeliveryIpc };
+module.exports = { azureFailureDetail, registerDeliveryIpc };

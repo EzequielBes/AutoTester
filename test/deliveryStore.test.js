@@ -210,8 +210,41 @@ test('migrates a version 2 delivery to version 3 with chain null, preserving flo
   assert.deepEqual(migrated.flowSnapshot, v2Delivery.flowSnapshot);
 });
 
-test('writes deliveries at STORE_VERSION 3', () => {
+test('migrates a version 3 delivery with an absent Azure sync record', () => {
+  const file = tmpFile();
+  const v3Delivery = { ...delivery(), flowSnapshot: null, chain: null };
+  fs.writeFileSync(file, JSON.stringify({ version: 3, deliveries: [v3Delivery] }));
+  const [migrated] = readDeliveries(file);
+  assert.equal(migrated.azureSync, null);
+});
+
+test('round-trips a strict Azure metadata projection', () => {
+  const file = tmpFile();
+  const azureSync = {
+    syncedAt: '2026-08-28T12:00:00.000Z',
+    envelope: {
+      repository: 'org/repository', branch: 'feature/delivery-store', pullRequest: null,
+      reviewers: ['alice'], workItems: [{ id: '1', title: 'Work item', url: 'https://example.test/1' }],
+      fetchedAt: '2026-08-28T12:00:00.000Z'
+    }
+  };
+  writeDeliveries(file, [{ ...delivery(), azureSync }]);
+  assert.deepEqual(readDeliveries(file)[0].azureSync, azureSync);
+});
+
+test('rejects Azure metadata with unknown fields', () => {
+  const invalid = {
+    syncedAt: '2026-08-28T12:00:00.000Z',
+    envelope: {
+      repository: 'org/repository', branch: 'feature/delivery-store', pullRequest: null,
+      reviewers: [], workItems: [], fetchedAt: '2026-08-28T12:00:00.000Z', accessToken: 'secret'
+    }
+  };
+  assert.throws(() => validateDelivery({ ...delivery(), azureSync: invalid }), /unsupported fields/);
+});
+
+test('writes deliveries at the current STORE_VERSION', () => {
   const file = tmpFile();
   writeDeliveries(file, [delivery()]);
-  assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).version, 3);
+  assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).version, STORE_VERSION);
 });
