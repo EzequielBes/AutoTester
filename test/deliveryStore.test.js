@@ -45,9 +45,9 @@ test('returns no deliveries before the store exists', () => {
 test('writes a versioned delivery store and reads it back', () => {
   const file = tmpFile();
   const deliveries = [delivery()];
-  writeDeliveries(file, deliveries);
+  const normalized = writeDeliveries(file, deliveries);
 
-  assert.deepEqual(readDeliveries(file), deliveries);
+  assert.deepEqual(readDeliveries(file), normalized);
   assert.equal(readDelivery(file, 'delivery-1').id, 'delivery-1');
   assert.equal(readDelivery(file, 'missing'), null);
   assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).version, STORE_VERSION);
@@ -216,6 +216,8 @@ test('migrates a version 3 delivery with an absent Azure sync record', () => {
   fs.writeFileSync(file, JSON.stringify({ version: 3, deliveries: [v3Delivery] }));
   const [migrated] = readDeliveries(file);
   assert.equal(migrated.azureSync, null);
+  assert.deepEqual(migrated.scope, { files: [], folders: [], glob: '' });
+  assert.deepEqual(migrated.scopeExceptions, []);
 });
 
 test('round-trips a strict Azure metadata projection', () => {
@@ -247,4 +249,26 @@ test('writes deliveries at the current STORE_VERSION', () => {
   const file = tmpFile();
   writeDeliveries(file, [delivery()]);
   assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).version, STORE_VERSION);
+});
+
+test('migrates either version 4 delivery shape without dropping Azure or scope data', () => {
+  const file = tmpFile();
+  const v4Delivery = {
+    ...delivery(),
+    azureSync: { syncedAt: '2026-08-28T12:00:00.000Z', envelope: {
+      repository: 'org/repository', branch: 'feature/delivery-store', pullRequest: null,
+      reviewers: [], workItems: [], fetchedAt: '2026-08-28T12:00:00.000Z'
+    } }
+  };
+  const scopeV4Delivery = {
+    ...delivery(), id: 'delivery-2',
+    scope: { files: ['src/deliveryStore.js'], folders: [], glob: '' },
+    scopeExceptions: []
+  };
+  fs.writeFileSync(file, JSON.stringify({ version: 4, deliveries: [v4Delivery, scopeV4Delivery] }));
+  const [migratedAzure, migratedScope] = readDeliveries(file);
+  assert.equal(migratedAzure.azureSync.envelope.repository, 'org/repository');
+  assert.deepEqual(migratedAzure.scope, { files: [], folders: [], glob: '' });
+  assert.equal(migratedScope.azureSync, null);
+  assert.deepEqual(migratedScope.scope, scopeV4Delivery.scope);
 });

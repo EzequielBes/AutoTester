@@ -281,6 +281,7 @@ function renderDeliveryDetail(delivery) {
   updated.textContent = `Atualizada ${new Date(delivery.updatedAt).toLocaleString('pt-BR')}`;
   header.append(eyebrow, title, updated);
   renderDeliveryTimeline(delivery.events);
+  renderScopeExceptions(delivery.scopeExceptions || []);
   selectedPolicyIds = new Set((delivery.flowSnapshot?.selectedPolicies || []).map((item) => item.id));
   selectedAgentProfileIds = new Set((delivery.flowSnapshot?.agentProfiles || []).map((item) => item.id));
   selectedQualitySkillIds = new Set((delivery.flowSnapshot?.qualitySkills || []).map((item) => item.id));
@@ -311,6 +312,9 @@ function renderDeliveryEditor(delivery) {
   document.getElementById('delivery-status').value = delivery?.status || 'draft';
   document.getElementById('delivery-next-action').value = delivery?.nextAction || '';
   document.getElementById('delivery-blocked-reason').value = delivery?.blockedReason || '';
+  document.getElementById('delivery-scope-files').value = (delivery?.scope?.files || []).join(', ');
+  document.getElementById('delivery-scope-folders').value = (delivery?.scope?.folders || []).join(', ');
+  document.getElementById('delivery-scope-glob').value = delivery?.scope?.glob || '';
   if (!delivery) {
     const header = document.getElementById('delivery-detail-header');
     header.textContent = '';
@@ -318,6 +322,7 @@ function renderDeliveryEditor(delivery) {
     title.textContent = 'Nova entrega';
     header.appendChild(title);
     renderDeliveryTimeline([]);
+    renderScopeExceptions([]);
     selectedPolicyIds = new Set();
     selectedAgentProfileIds = new Set();
     selectedQualitySkillIds = new Set();
@@ -337,6 +342,31 @@ function renderDeliveryEditor(delivery) {
     renderInconsistencyList({ events: [] });
     renderChainConfirmed({ chain: null });
   }
+}
+
+function splitScopeItems(value) {
+  return value.split(',').map((item) => item.trim()).filter(Boolean);
+}
+
+function renderScopeExceptions(exceptions) {
+  const list = document.getElementById('delivery-scope-exception-list');
+  list.textContent = '';
+  if (exceptions.length === 0) {
+    const empty = document.createElement('p');
+    empty.className = 'helper-text';
+    empty.textContent = 'Nenhuma exceção de escopo registrada.';
+    list.appendChild(empty);
+    return;
+  }
+  exceptions.forEach((exception) => {
+    const item = document.createElement('article');
+    const files = document.createElement('strong');
+    files.textContent = exception.files.join(', ');
+    const detail = document.createElement('p');
+    detail.textContent = `${exception.justification} (${exception.phaseId} / ${exception.actorId})`;
+    item.append(files, detail);
+    list.appendChild(item);
+  });
 }
 
 function renderDeliveryTimeline(events) {
@@ -383,7 +413,12 @@ async function saveDelivery(event) {
       branch: document.getElementById('delivery-branch').value.trim(),
       baseBranch: document.getElementById('delivery-base-branch').value.trim(),
       nextAction: document.getElementById('delivery-next-action').value.trim(),
-      blockedReason: document.getElementById('delivery-blocked-reason').value.trim()
+      blockedReason: document.getElementById('delivery-blocked-reason').value.trim(),
+      scope: {
+        files: splitScopeItems(document.getElementById('delivery-scope-files').value),
+        folders: splitScopeItems(document.getElementById('delivery-scope-folders').value),
+        glob: document.getElementById('delivery-scope-glob').value.trim()
+      }
     });
     renderDeliveryDetail(saved);
     await loadDeliveries();
@@ -392,6 +427,34 @@ async function saveDelivery(event) {
     setStatus(`Erro ao salvar entrega: ${err.message}`, 'error');
   }
 }
+
+document.getElementById('record-scope-exception-btn').addEventListener('click', async () => {
+  const status = document.getElementById('delivery-scope-exception-status');
+  if (!editingDeliveryId) {
+    status.textContent = 'Salve a entrega antes de registrar uma exceção.';
+    status.className = 'status error';
+    return;
+  }
+  try {
+    const updated = await window.api.recordDeliveryScopeException({
+      deliveryId: editingDeliveryId,
+      exception: {
+        files: splitScopeItems(document.getElementById('scope-exception-files').value),
+        justification: document.getElementById('scope-exception-justification').value.trim(),
+        phaseId: document.getElementById('scope-exception-phase').value.trim(),
+        actorId: document.getElementById('scope-exception-actor').value.trim()
+      }
+    });
+    deliveries = deliveries.map((item) => item.id === updated.id ? updated : item);
+    renderDeliveryDetail(updated);
+    renderDeliveryList(deliveries);
+    status.textContent = 'Exceção de escopo registrada.';
+    status.className = 'status';
+  } catch (err) {
+    status.textContent = `Erro ao registrar exceção: ${err.message}`;
+    status.className = 'status error';
+  }
+});
 
 // --- Delivery flow: policies, rules, track and snapshot ---
 

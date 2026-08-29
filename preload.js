@@ -34,6 +34,7 @@ contextBridge.exposeInMainWorld('api', {
   listDeliveries: () => ipcRenderer.invoke('deliveries:list'),
   openDelivery: (deliveryId) => ipcRenderer.invoke('deliveries:open', deliveryId),
   saveDelivery: (draft) => ipcRenderer.invoke('deliveries:save', draft),
+  recordDeliveryScopeException: (params) => ipcRenderer.invoke('deliveries:record-scope-exception', params),
   buildDeliveryFlowSnapshot: (params) => ipcRenderer.invoke('deliveries:build-flow-snapshot', params),
   syncAzure: (deliveryId) => ipcRenderer.invoke('deliveries:sync-azure', deliveryId),
   suggestChain: (deliveryIds) => ipcRenderer.invoke('deliveries:suggest-chain', deliveryIds),

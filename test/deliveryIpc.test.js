@@ -131,6 +131,22 @@ test('rejects flow snapshot build calls from an untrusted renderer', () => {
   }), /untrusted/);
 });
 
+test('records a validated scope exception with generated audit fields', () => {
+  const { handlers } = setup();
+  const saved = handlers.get('deliveries:save')({ sender: {} }, draft());
+  const updated = handlers.get('deliveries:record-scope-exception')({ sender: {} }, {
+    deliveryId: saved.id,
+    exception: {
+      files: ['src/shared.js'], justification: 'Shared contract requires an update.',
+      phaseId: 'implementation', actorId: 'agent-1'
+    }
+  });
+  assert.equal(updated.scopeExceptions.length, 1);
+  assert.ok(updated.scopeExceptions[0].id);
+  assert.ok(updated.scopeExceptions[0].createdAt);
+  assert.equal(updated.events.at(-1).kind, 'scope-exception');
+});
+
 test('builds a flow snapshot from current policy, track, profile and skill records', () => {
   const original = storedDelivery();
   const policy = { id: 'policy-1', path: 'AGENTS.md', excerpt: 'Follow the rules.' };

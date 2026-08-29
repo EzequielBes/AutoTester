@@ -53,8 +53,27 @@
             </div>
             <label>Próxima ação<input type="text" id="delivery-next-action" maxlength="2000" placeholder="Qual é o próximo passo?" /></label>
             <label>Motivo do impedimento<textarea id="delivery-blocked-reason" maxlength="2000" placeholder="Registre um impedimento, se houver."></textarea></label>
+            <h2 class="panel-title">Escopo da entrega</h2>
+            <p class="helper-text">Defina arquivos, pastas ou glob permitidos. Separe itens por vírgula; escopo vazio não autoriza escrita automática.</p>
+            <label>Arquivos<input type="text" id="delivery-scope-files" placeholder="src/app.js, src/config.js" /></label>
+            <label>Pastas<input type="text" id="delivery-scope-folders" placeholder="src, test" /></label>
+            <label>Glob<input type="text" id="delivery-scope-glob" placeholder="docs/**/*.md, !docs/drafts/**" /></label>
             <div class="actions"><button type="submit" class="primary">Salvar entrega</button></div>
           </form>
+
+          <section class="delivery-scope-section" aria-labelledby="delivery-scope-exceptions-title">
+            <h2 id="delivery-scope-exceptions-title" class="panel-title">Exceções de escopo</h2>
+            <p class="helper-text">Registre uma justificativa antes de qualquer mudança fora do escopo.</p>
+            <label>Arquivos afetados<input type="text" id="scope-exception-files" placeholder="src/shared.js" /></label>
+            <label>Justificativa<textarea id="scope-exception-justification" maxlength="2000" placeholder="Por que esta alteração fora do escopo é necessária?"></textarea></label>
+            <div class="row">
+              <label class="grow">Fase responsável<input type="text" id="scope-exception-phase" placeholder="implementation" /></label>
+              <label class="grow">Agente responsável<input type="text" id="scope-exception-actor" placeholder="agent-id" /></label>
+            </div>
+            <div class="actions"><button type="button" id="record-scope-exception-btn">Registrar exceção</button></div>
+            <div id="delivery-scope-exception-status" class="status"></div>
+            <div id="delivery-scope-exception-list" class="inset"></div>
+          </section>
 
           <section class="delivery-flow-section" aria-labelledby="delivery-flow-title">
             <h2 id="delivery-flow-title" class="panel-title">Fluxo</h2>
