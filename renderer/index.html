@@ -93,11 +93,14 @@
           <section class="delivery-chain-section" aria-labelledby="delivery-chain-title">
             <h2 id="delivery-chain-title" class="panel-title">Cadeia e Azure</h2>
             <p class="helper-text">Sincronize com o Azure DevOps pelo MCP do Claude CLI e revise uma sugestão de cadeia antes de confirmá-la.</p>
+            <p class="panel-title" id="delivery-chain-candidates-label">Entregas para a cadeia</p>
+            <div id="delivery-chain-candidate-list" class="inset" role="group" aria-labelledby="delivery-chain-candidates-label"></div>
             <div class="actions">
               <button type="button" id="sync-azure-btn">Sincronizar com Azure</button>
               <button type="button" id="suggest-chain-btn">Sugerir cadeia</button>
             </div>
             <p id="delivery-sync-status" class="status" role="status"></p>
+            <div id="delivery-azure-summary" class="flow-snapshot-summary"></div>
             <ul id="delivery-inconsistency-list" class="inconsistency-list" aria-label="Inconsistências"></ul>
             <div id="delivery-chain-suggestion" class="chain-suggestion" hidden>
               <p class="panel-title">Sugestão de cadeia (não confirmada)</p>

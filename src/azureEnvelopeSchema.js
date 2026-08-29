@@ -58,4 +58,21 @@ function validateAzureEnvelope(parsed) {
   return { valid: errors.length === 0, errors };
 }
 
-module.exports = { validateAzureEnvelope, MAX_TEXT_LENGTH, MAX_URL_LENGTH, MAX_REVIEWERS, MAX_WORK_ITEMS };
+function projectAzureEnvelope(parsed) {
+  return {
+    repository: parsed.repository,
+    branch: parsed.branch,
+    pullRequest: parsed.pullRequest === null ? null : {
+      id: parsed.pullRequest.id,
+      title: parsed.pullRequest.title,
+      status: parsed.pullRequest.status,
+      targetBranch: parsed.pullRequest.targetBranch,
+      url: parsed.pullRequest.url
+    },
+    reviewers: [...parsed.reviewers],
+    workItems: parsed.workItems.map((item) => ({ id: item.id, title: item.title, url: item.url })),
+    fetchedAt: parsed.fetchedAt
+  };
+}
+
+module.exports = { validateAzureEnvelope, projectAzureEnvelope, MAX_TEXT_LENGTH, MAX_URL_LENGTH, MAX_REVIEWERS, MAX_WORK_ITEMS };

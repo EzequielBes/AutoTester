@@ -3,8 +3,9 @@
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
+const { validateAzureEnvelope, projectAzureEnvelope } = require('./azureEnvelopeSchema');
 
-const STORE_VERSION = 3;
+const STORE_VERSION = 4;
 const MAX_TEXT_LENGTH = 2000;
 const DELIVERY_STATUSES = new Set([
   'draft', 'active', 'blocked', 'validating', 'ready-for-pr',
@@ -45,6 +46,22 @@ function validateChain(chain) {
   validateText(chain.confirmedAt, 'chain.confirmedAt', { required: true });
 }
 
+function validateAzureSync(azureSync) {
+  if (azureSync === null || azureSync === undefined) return;
+  if (!azureSync || typeof azureSync !== 'object' || Array.isArray(azureSync)) {
+    throw new Error('delivery.azureSync must be an object');
+  }
+  if (!Object.keys(azureSync).every((key) => ['envelope', 'syncedAt'].includes(key))) {
+    throw new Error('delivery.azureSync contains unsupported fields');
+  }
+  validateText(azureSync.syncedAt, 'delivery.azureSync.syncedAt', { required: true });
+  const { valid, errors } = validateAzureEnvelope(azureSync.envelope);
+  if (!valid) throw new Error(`delivery.azureSync.envelope is invalid: ${errors.join('; ')}`);
+  if (JSON.stringify(azureSync.envelope) !== JSON.stringify(projectAzureEnvelope(azureSync.envelope))) {
+    throw new Error('delivery.azureSync.envelope contains unsupported fields');
+  }
+}
+
 function validateDelivery(delivery) {
   if (!delivery || typeof delivery !== 'object' || Array.isArray(delivery)) {
     throw new Error('delivery must be an object');
@@ -64,6 +81,7 @@ function validateDelivery(delivery) {
   delivery.events.forEach(validateEvent);
   validateFlowSnapshot(delivery.flowSnapshot);
   validateChain(delivery.chain);
+  validateAzureSync(delivery.azureSync);
 }
 
 function validateDeliveries(deliveries) {
@@ -84,6 +102,10 @@ function migrateV2Delivery(delivery) {
   return { ...delivery, chain: null };
 }
 
+function migrateV3Delivery(delivery) {
+  return { ...delivery, azureSync: null };
+}
+
 function readDeliveries(filePath) {
   if (!fs.existsSync(filePath)) return [];
   let data;
@@ -100,6 +122,8 @@ function readDeliveries(filePath) {
     deliveries = data.deliveries.map(migrateV1Delivery);
   } else if (data.version === 2) {
     deliveries = data.deliveries.map(migrateV2Delivery);
+  } else if (data.version === 3) {
+    deliveries = data.deliveries.map(migrateV3Delivery);
   } else if (data.version === STORE_VERSION) {
     deliveries = data.deliveries;
   } else {
@@ -126,6 +150,7 @@ module.exports = {
   STORE_VERSION,
   DELIVERY_STATUSES,
   validateDelivery,
+  validateAzureSync,
   readDelivery,
   readDeliveries,
   writeDeliveries

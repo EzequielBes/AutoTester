@@ -28,6 +28,7 @@ let livePhaseResults = new Map();
 let deliveries = [];
 let editingDeliveryId = null;
 let chainSuggestionState = null;
+let selectedChainDeliveryIds = new Set();
 let projectPolicies = [];
 let discoveredRules = [];
 let selectedPolicyIds = new Set();
@@ -293,6 +294,9 @@ function renderDeliveryDetail(delivery) {
   document.getElementById('delivery-flow-status').textContent = '';
   rejectChainSuggestion();
   document.getElementById('delivery-sync-status').textContent = '';
+  renderAzureSummary(delivery.azureSync);
+  selectedChainDeliveryIds = new Set([delivery.id]);
+  renderChainCandidates();
   renderInconsistencyList(delivery);
   renderChainConfirmed(delivery);
 }
@@ -327,6 +331,9 @@ function renderDeliveryEditor(delivery) {
     document.getElementById('delivery-flow-status').textContent = 'Salve a entrega antes de configurar o fluxo.';
     rejectChainSuggestion();
     document.getElementById('delivery-sync-status').textContent = '';
+    renderAzureSummary(null);
+    selectedChainDeliveryIds = new Set();
+    renderChainCandidates();
     renderInconsistencyList({ events: [] });
     renderChainConfirmed({ chain: null });
   }
@@ -568,6 +575,38 @@ function renderFlowSnapshotSummary(flowSnapshot) {
 
 // --- Delivery chain and Azure sync ---
 
+function renderChainCandidates() {
+  const list = document.getElementById('delivery-chain-candidate-list');
+  list.textContent = '';
+  if (deliveries.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'empty-state';
+    empty.textContent = 'Salve entregas para montar uma cadeia.';
+    list.appendChild(empty);
+    return;
+  }
+  deliveries.forEach((delivery) => {
+    const row = document.createElement('label');
+    row.className = 'check-row';
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.checked = selectedChainDeliveryIds.has(delivery.id);
+    checkbox.addEventListener('change', () => {
+      if (checkbox.checked) selectedChainDeliveryIds.add(delivery.id); else selectedChainDeliveryIds.delete(delivery.id);
+    });
+    const body = document.createElement('div');
+    body.className = 'check-row-body';
+    const objective = document.createElement('strong');
+    objective.textContent = delivery.objective;
+    const branch = document.createElement('span');
+    branch.className = 'technical-value';
+    branch.textContent = delivery.branch;
+    body.append(objective, branch);
+    row.append(checkbox, body);
+    list.appendChild(row);
+  });
+}
+
 function renderInconsistencyList(delivery) {
   const list = document.getElementById('delivery-inconsistency-list');
   list.textContent = '';
@@ -590,6 +629,26 @@ function renderInconsistencyList(delivery) {
     item.append(timestamp, detail);
     list.appendChild(item);
   });
+}
+
+function renderAzureSummary(azureSync) {
+  const container = document.getElementById('delivery-azure-summary');
+  container.textContent = '';
+  if (!azureSync) return;
+  const envelope = azureSync.envelope;
+  const syncedAt = document.createElement('p');
+  syncedAt.textContent = `Azure sincronizado em ${new Date(azureSync.syncedAt).toLocaleString('pt-BR')}.`;
+  const repository = document.createElement('p');
+  repository.textContent = `Repositório Azure: ${envelope.repository} · branch ${envelope.branch}`;
+  container.append(syncedAt, repository);
+  if (envelope.pullRequest) {
+    const pr = document.createElement('p');
+    pr.textContent = `PR #${envelope.pullRequest.id}: ${envelope.pullRequest.title} (${envelope.pullRequest.status}) → ${envelope.pullRequest.targetBranch}`;
+    container.appendChild(pr);
+  }
+  const related = document.createElement('p');
+  related.textContent = `${envelope.reviewers.length} revisor(es) e ${envelope.workItems.length} work item(s).`;
+  container.appendChild(related);
 }
 
 function renderChainConfirmed(delivery) {
@@ -632,7 +691,12 @@ async function suggestChain() {
   }
   setSyncStatus('Sugerindo cadeia...', 'running');
   try {
-    const result = await window.api.suggestChain([editingDeliveryId]);
+    const deliveryIds = [...selectedChainDeliveryIds];
+    if (deliveryIds.length === 0) {
+      setSyncStatus('Selecione ao menos uma entrega para sugerir a cadeia.', 'error');
+      return;
+    }
+    const result = await window.api.suggestChain(deliveryIds);
     if (!result.suggestion || result.suggestion.length === 0) {
       setSyncStatus('Nenhuma cadeia sugerida para esta entrega.');
       return;
