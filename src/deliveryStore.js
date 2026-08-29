@@ -3,8 +3,9 @@
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
+const { DEFAULT_DELIVERY_SCOPE, validateDeliveryScope, validateScopeException } = require('./deliveryScope');
 
-const STORE_VERSION = 3;
+const STORE_VERSION = 4;
 const MAX_TEXT_LENGTH = 2000;
 const DELIVERY_STATUSES = new Set([
   'draft', 'active', 'blocked', 'validating', 'ready-for-pr',
@@ -64,6 +65,11 @@ function validateDelivery(delivery) {
   delivery.events.forEach(validateEvent);
   validateFlowSnapshot(delivery.flowSnapshot);
   validateChain(delivery.chain);
+  if (delivery.scope !== undefined) validateDeliveryScope(delivery.scope);
+  if (delivery.scopeExceptions !== undefined) {
+    if (!Array.isArray(delivery.scopeExceptions)) throw new Error('delivery.scopeExceptions must be an array');
+    delivery.scopeExceptions.forEach(validateScopeException);
+  }
 }
 
 function validateDeliveries(deliveries) {
@@ -84,6 +90,10 @@ function migrateV2Delivery(delivery) {
   return { ...delivery, chain: null };
 }
 
+function migrateV3Delivery(delivery) {
+  return { ...delivery, scope: { ...DEFAULT_DELIVERY_SCOPE }, scopeExceptions: [] };
+}
+
 function readDeliveries(filePath) {
   if (!fs.existsSync(filePath)) return [];
   let data;
@@ -100,6 +110,8 @@ function readDeliveries(filePath) {
     deliveries = data.deliveries.map(migrateV1Delivery);
   } else if (data.version === 2) {
     deliveries = data.deliveries.map(migrateV2Delivery);
+  } else if (data.version === 3) {
+    deliveries = data.deliveries.map(migrateV3Delivery);
   } else if (data.version === STORE_VERSION) {
     deliveries = data.deliveries;
   } else {
@@ -115,16 +127,22 @@ function readDelivery(filePath, deliveryId) {
 }
 
 function writeDeliveries(filePath, deliveries) {
-  validateDeliveries(deliveries);
+  const normalizedDeliveries = deliveries.map((delivery) => ({
+    ...delivery,
+    scope: delivery.scope || { ...DEFAULT_DELIVERY_SCOPE },
+    scopeExceptions: delivery.scopeExceptions || []
+  }));
+  validateDeliveries(normalizedDeliveries);
   const temporaryPath = path.join(path.dirname(filePath), `.${path.basename(filePath)}.${process.pid}.${crypto.randomUUID()}.tmp`);
-  fs.writeFileSync(temporaryPath, JSON.stringify({ version: STORE_VERSION, deliveries }, null, 2));
+  fs.writeFileSync(temporaryPath, JSON.stringify({ version: STORE_VERSION, deliveries: normalizedDeliveries }, null, 2));
   fs.renameSync(temporaryPath, filePath);
-  return deliveries;
+  return normalizedDeliveries;
 }
 
 module.exports = {
   STORE_VERSION,
   DELIVERY_STATUSES,
+  DEFAULT_DELIVERY_SCOPE,
   validateDelivery,
   readDelivery,
   readDeliveries,

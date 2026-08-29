@@ -6,6 +6,7 @@ const { readProjectPolicies } = require('./projectPolicyStore');
 const { readValidationTracks } = require('./validationTrackStore');
 const { readAgentProfiles } = require('./agentProfileStore');
 const { readQualitySkills } = require('./qualitySkillStore');
+const { DEFAULT_DELIVERY_SCOPE, validateScopeException } = require('./deliveryScope');
 
 function buildDeliveryFromDraft(draft, existing) {
   if (!draft || typeof draft !== 'object' || Array.isArray(draft)) {
@@ -29,7 +30,9 @@ function buildDeliveryFromDraft(draft, existing) {
     updatedAt,
     events: existing ? existing.events : [],
     flowSnapshot: existing ? existing.flowSnapshot : null,
-    chain: existing ? existing.chain : null
+    chain: existing ? existing.chain : null,
+    scope: draft.scope || existing?.scope || { ...DEFAULT_DELIVERY_SCOPE },
+    scopeExceptions: existing ? existing.scopeExceptions : []
   };
 }
 
@@ -101,6 +104,27 @@ function registerDeliveryIpc(ipcMain, {
     const delivery = { ...existing, flowSnapshot };
     return writeDeliveries(deliveriesFilePath(), deliveries.map((item) => item.id === existing.id ? delivery : item))
       .find((item) => item.id === delivery.id);
+  });
+
+  ipcMain.handle('deliveries:record-scope-exception', (event, { deliveryId, exception } = {}) => {
+    assertTrustedRenderer(event);
+    const deliveries = readDeliveries(deliveriesFilePath());
+    const existing = deliveries.find((item) => item.id === deliveryId);
+    if (!existing) throw new Error('delivery was not found');
+    const recorded = {
+      id: crypto.randomUUID(),
+      files: exception?.files,
+      justification: exception?.justification,
+      phaseId: exception?.phaseId,
+      actorId: exception?.actorId,
+      createdAt: new Date().toISOString()
+    };
+    validateScopeException(recorded);
+    const delivery = appendEvent({ ...existing, scopeExceptions: [...existing.scopeExceptions, recorded] }, {
+      kind: 'scope-exception', detail: `Scope exception recorded for ${recorded.files.length} file(s).`
+    });
+    return writeDeliveries(deliveriesFilePath(), deliveries.map((item) => item.id === existing.id ? delivery : item))
+      .find((item) => item.id === existing.id);
   });
 
   ipcMain.handle('deliveries:sync-azure', async (event, deliveryId) => {

@@ -45,9 +45,9 @@ test('returns no deliveries before the store exists', () => {
 test('writes a versioned delivery store and reads it back', () => {
   const file = tmpFile();
   const deliveries = [delivery()];
-  writeDeliveries(file, deliveries);
+  const normalized = writeDeliveries(file, deliveries);
 
-  assert.deepEqual(readDeliveries(file), deliveries);
+  assert.deepEqual(readDeliveries(file), normalized);
   assert.equal(readDelivery(file, 'delivery-1').id, 'delivery-1');
   assert.equal(readDelivery(file, 'missing'), null);
   assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).version, STORE_VERSION);
@@ -210,8 +210,16 @@ test('migrates a version 2 delivery to version 3 with chain null, preserving flo
   assert.deepEqual(migrated.flowSnapshot, v2Delivery.flowSnapshot);
 });
 
-test('writes deliveries at STORE_VERSION 3', () => {
+test('writes deliveries at the current store version', () => {
   const file = tmpFile();
   writeDeliveries(file, [delivery()]);
-  assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).version, 3);
+  assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).version, STORE_VERSION);
+});
+
+test('migrates a version 3 delivery with an empty scope and exceptions', () => {
+  const file = tmpFile();
+  fs.writeFileSync(file, JSON.stringify({ version: 3, deliveries: [{ ...delivery(), flowSnapshot: null, chain: null }] }));
+  const [migrated] = readDeliveries(file);
+  assert.deepEqual(migrated.scope, { files: [], folders: [], glob: '' });
+  assert.deepEqual(migrated.scopeExceptions, []);
 });
