@@ -2,8 +2,14 @@
 
 const deliveries = [];
 let tracks = [];
+let pendingTrackRun = null;
 const agentProfiles = [{ id: 'claude', name: 'Claude padrao', runtime: 'claude', instructions: '' }];
 const qualitySkills = [{ id: 'general', name: 'Review geral', baseSkill: 'general', instructions: '', canApply: true }];
+const history = [{
+  id: 'history-1', kind: 'review', status: 'passed', timestamp: '2026-08-29T00:00:00.000Z',
+  branch: 'feature/renderer-smoke', files: ['src/deliveryStore.js'], skill: 'general', intensity: 'full',
+  findingsCount: 0, acceptedCount: 0, findings: []
+}];
 
 function deliveryDefaults(draft, existing) {
   return {
@@ -19,7 +25,11 @@ function deliveryDefaults(draft, existing) {
 }
 
 const api = {
-  readHistory: async () => [],
+  readHistory: async () => history,
+  readHistorySettings: async () => ({ maxEntries: 100 }),
+  saveHistorySettings: async ({ maxEntries }) => ({ maxEntries }),
+  openHistoryEntry: async (id) => history.find((entry) => entry.id === id) || null,
+  exportHistoryEntry: async () => '/tmp/autotester-history.json',
   listDeliveries: async () => deliveries,
   openDelivery: async (id) => deliveries.find((delivery) => delivery.id === id) || null,
   saveDelivery: async (draft) => {
@@ -44,6 +54,22 @@ const api = {
   },
   listAgentProfiles: async () => agentProfiles,
   listQualitySkills: async () => qualitySkills,
+  listBranches: async () => ['feature/renderer-smoke'],
+  getBranchInfo: async () => ({
+    isBase: false, ahead: 1, behind: 0, baseBranch: 'Dev', changedFiles: 1,
+    lastCommit: { hash: 'abc1234', subject: 'Smoke test', author: 'AutoTester', date: '2026-08-29' }
+  }),
+  listFiles: async () => ['src/deliveryStore.js'],
+  filterFiles: async (files) => files,
+  runValidationTrack: async ({ executionId }) => new Promise((resolve) => {
+    pendingTrackRun = { executionId, resolve };
+  }),
+  cancelValidationTrack: async (executionId) => {
+    if (!pendingTrackRun || pendingTrackRun.executionId !== executionId) return false;
+    pendingTrackRun.resolve({ status: 'cancelled', phases: [], fileContents: {} });
+    pendingTrackRun = null;
+    return true;
+  },
   onValidationTrackProgress: () => () => {}
 };
 

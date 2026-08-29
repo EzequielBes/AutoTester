@@ -58,10 +58,33 @@ async function main() {
       document.getElementById('save-track-btn').click();
       await waitFor(() => document.querySelector('.track-list-entry')?.textContent.includes('Trilha com escrita'), 'saved track');
 
+      document.getElementById('tab-review').click();
+      setValue('repo-path', '/work/repository');
+      document.getElementById('load-branches-btn').click();
+      await waitFor(() => document.getElementById('branch-select').value === 'feature/renderer-smoke', 'loaded branch');
+      document.getElementById('load-files-btn').click();
+      await waitFor(() => document.querySelector('#file-list input[type="checkbox"]'), 'loaded files');
+      document.getElementById('select-visible-files-btn').click();
+      document.getElementById('track-select').value = 'track-1';
+      document.getElementById('run-track-btn').click();
+      await waitFor(() => !document.getElementById('cancel-track-btn').disabled, 'running track');
+      document.getElementById('cancel-track-btn').click();
+      await waitFor(() => document.getElementById('status').textContent.includes('cancelada'), 'cancelled track');
+      const trackCancelled = document.getElementById('status').textContent.includes('cancelada');
+
+      document.getElementById('tab-history').click();
+      await waitFor(() => document.querySelector('#history-list button'), 'history entry');
+      document.querySelector('#history-list button').click();
+      await waitFor(() => !document.getElementById('history-details').classList.contains('hidden'), 'history details');
+      [...document.querySelectorAll('#history-details button')].find((button) => button.textContent === 'Exportar JSON').click();
+      await waitFor(() => document.getElementById('status').textContent.includes('Relatório exportado'), 'history export');
+
       return {
         deliveryObjective: document.getElementById('delivery-objective').value,
         exceptionCount: document.querySelectorAll('#delivery-scope-exception-list article').length,
-        trackCanWrite: document.querySelector('.phase-can-write').checked
+        trackCanWrite: document.querySelector('.phase-can-write').checked,
+        trackCancelled,
+        historyExported: document.getElementById('status').textContent.includes('Relatório exportado')
       };
     })()
   `);

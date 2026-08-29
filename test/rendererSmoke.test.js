@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { spawn } = require('node:child_process');
 const path = require('node:path');
 
-test('renderer smoke flow creates a delivery, records an exception, and saves write permission', async () => {
+test('renderer smoke flow manages deliveries, validation execution, and history', async () => {
   const electron = require('electron');
   const harness = path.join(__dirname, '..', 'test-support', 'rendererSmokeHarness.js');
   const child = spawn(electron, [harness], { windowsHide: true });
@@ -21,4 +21,6 @@ test('renderer smoke flow creates a delivery, records an exception, and saves wr
   assert.equal(result.deliveryObjective, 'Validar fluxo da interface');
   assert.equal(result.exceptionCount, 1);
   assert.equal(result.trackCanWrite, true);
+  assert.equal(result.trackCancelled, true);
+  assert.equal(result.historyExported, true);
 });
